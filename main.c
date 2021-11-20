@@ -50,7 +50,7 @@ main(const int argc, const char **argv) {
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
+    addr.sin_family      = AF_INET6;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(args->pop3_port);
 
@@ -75,7 +75,7 @@ main(const int argc, const char **argv) {
         goto finally;
     }
 
-    // registrar sigterm es Ãºtil para terminar el programa normalmente.
+    // registrar sigterm es til para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT,  sigterm_handler);

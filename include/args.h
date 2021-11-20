@@ -10,21 +10,17 @@ struct users {
     char *pass;
 };
 
-struct doh {
-    char           *host;
-    char           *ip;
-    unsigned short  port;
-    char           *path;
-    char           *query;
-};
-
 struct pop3args {
     char * error_file;
+
     char * pop3_listen_address;
+    uint16_t pop3_port;
+
     char * management_listen_address;
     uint16_t management_port;
-    uint16_t pop3_port;
+
     uint16_t origin_port;
+
     char * filter;
 };
 
