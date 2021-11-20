@@ -13,7 +13,7 @@ test:
 	done;
 
 pop3filter:
-	$(COMPILER) $(CFLAGS) -I./include -o pop3filter ./src/$(CFILES) $(CFILES)
+	$(COMPILER) $(CFLAGS) -I./include -o pop3filter ./main.c ./src/$(CFILES) 
 
 clean:
 	rm -f *.o pop3filter
