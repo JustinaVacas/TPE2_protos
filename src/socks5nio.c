@@ -20,84 +20,15 @@
 #include "socks5nio.h"
 #include "netutils.h"
 
-#define N(x) (sizeof(x)/sizeof((x)[0]))
+#define MAX_POOL 89
+
+static unsigned pool_size = 0;
+static struct sock *pool = NULL;
 
 
-/** maquina de estados general */
-enum socks_v5state {
-    /**
-     * recibe el mensaje `hello` del cliente, y lo procesa
-     *
-     * Intereses:
-     *     - OP_READ sobre client_fd
-     *
-     * Transiciones:
-     *   - HELLO_READ  mientras el mensaje no estÃ© completo
-     *   - HELLO_WRITE cuando estÃ¡ completo
-     *   - ERROR       ante cualquier error (IO/parseo)
-     */
-    HELLO_READ,
+//aca va un socks5_new()
 
-    /**
-     * envÃ­a la respuesta del `hello' al cliente.
-     *
-     * Intereses:
-     *     - OP_WRITE sobre client_fd
-     *
-     * Transiciones:
-     *   - HELLO_WRITE  mientras queden bytes por enviar
-     *   - REQUEST_READ cuando se enviaron todos los bytes
-     *   - ERROR        ante cualquier error (IO/parseo)
-     */
-    HELLO_WRITE,
-
-    // estados terminales
-    DONE,
-    ERROR,
-};
-
-////////////////////////////////////////////////////////////////////
-// DefiniciÃ³n de variables para cada estado
-
-/** usado por HELLO_READ, HELLO_WRITE */
-struct hello_st {
-    /** buffer utilizado para I/O */
-    buffer               *rb, *wb;
-    struct hello_parser   parser;
-    /** el mÃ©todo de autenticaciÃ³n seleccionado */
-    uint8_t               method;
-} ;
-
-
-/*
- * Si bien cada estado tiene su propio struct que le da un alcance
- * acotado, disponemos de la siguiente estructura para hacer una Ãºnica
- * alocaciÃ³n cuando recibimos la conexiÃ³n.
- *
- * Se utiliza un contador de referencias (references) para saber cuando debemos
- * liberarlo finalmente, y un pool para reusar alocaciones previas.
- */
-struct socks5 {
-
-    /** maquinas de estados */
-    struct state_machine          stm;
-
-    /** estados para el client_fd */
-    union {
-        struct hello_st           hello;
-        struct request_st         request;
-        struct copy               copy;
-    } client;
-    /** estados para el origin_fd */
-    union {
-        struct connecting         conn;
-        struct copy               copy;
-    } orig;
-
-};
-
-
-/** realmente destruye */
+/* realmente destruye */
 static void
 socks5_destroy_(struct socks5* s) {
     if(s->origin_resolution != NULL) {
@@ -117,7 +48,7 @@ socks5_destroy(struct socks5 *s) {
         // nada para hacer
     } else if(s->references == 1) {
         if(s != NULL) {
-            if(pool_size < max_pool) {
+            if(pool_size < MAX_POOL) {
                 s->next = pool;
                 pool    = s;
                 pool_size++;
@@ -139,16 +70,14 @@ socksv5_pool_destroy(void) {
     }
 }
 
-/** obtiene el struct (socks5 *) desde la llave de selecciÃ³n  */
-#define ATTACHMENT(key) ( (struct socks5 *)(key)->data)
-
-/* declaraciÃ³n forward de los handlers de selecciÃ³n de una conexiÃ³n
+/** declaraciÃ³n forward de los handlers de selecciÃ³n de una conexiÃ³n
  * establecida entre un cliente y el proxy.
  */
 static void socksv5_read   (struct selector_key *key);
 static void socksv5_write  (struct selector_key *key);
 static void socksv5_block  (struct selector_key *key);
 static void socksv5_close  (struct selector_key *key);
+
 static const struct fd_handler socks5_handler = {
     .handle_read   = socksv5_read,
     .handle_write  = socksv5_write,
@@ -179,14 +108,16 @@ socksv5_passive_accept(struct selector_key *key) {
         goto fail;
     }
     memcpy(&state->client_addr, &client_addr, client_addr_len);
-    state->client_addr_len = client_addr_len;
+    //state->client_addr_len = client_addr_len;
 
-    if(SELECTOR_SUCCESS != selector_register(key->s, client, &socks5_handler,
-                                              OP_READ, state)) {
+    if(SELECTOR_SUCCESS != selector_register(key->s, client, &socks5_handler, OP_READ, state)) {
+        //otros lo ponen OP_WRITE
         goto fail;
     }
+
     return ;
-fail:
+
+    fail:
     if(client != -1) {
         close(client);
     }
@@ -272,7 +203,7 @@ static const struct state_definition client_statbl[] = {
     {
         .state            = HELLO_READ,
         .on_arrival       = hello_read_init,
-        .on_departure     = hello_read_close,
+        .on_departure     = hello_read, //antes decia hello_read_close
         .on_read_ready    = hello_read,
     },
 };
