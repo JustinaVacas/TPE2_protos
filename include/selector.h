@@ -1,8 +1,22 @@
 #ifndef SELECTOR_H_W50GNLODsARolpHbsDsrvYvMsbT
 #define SELECTOR_H_W50GNLODsARolpHbsDsrvYvMsbT
 
-#include <sys/time.h>
 #include <stdbool.h>
+#include <stdio.h>  // perror
+#include <stdlib.h> // malloc
+#include <string.h> // memset
+#include <assert.h> // :)
+#include <errno.h>  // :)
+#include <pthread.h>
+
+#include <stdint.h> // SIZE_MAX
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <signal.h>
+#include <sys/time.h>
 
 /**
  * selector.c - un muliplexor de entrada salida
@@ -133,6 +147,7 @@ typedef struct fd_handler {
    * Seguramente deba liberar los recusos alocados en data.
    */
   void (*handle_close)     (struct selector_key *key);
+  void (*handle_timeout)   (struct selector_key *key);
 
 } fd_handler;
 
@@ -189,5 +204,9 @@ selector_fd_set_nio(const int fd);
 selector_status
 selector_notify_block(fd_selector s,
                  const int   fd);
+
+/** llama al handler de timeout */
+void 
+selector_timeout(fd_selector s);
 
 #endif

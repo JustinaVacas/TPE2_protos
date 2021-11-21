@@ -1,21 +1,7 @@
 /**
  * selector.c - un muliplexor de entrada salida
  */
-#include <stdio.h>  // perror
-#include <stdlib.h> // malloc
-#include <string.h> // memset
-#include <assert.h> // :)
-#include <errno.h>  // :)
-#include <pthread.h>
-
-#include <stdint.h> // SIZE_MAX
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <sys/signal.h>
-#include "selector.h"
+#include <selector.h>
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -586,4 +572,20 @@ selector_fd_set_nio(const int fd) {
         }
     }
     return ret;
+}
+
+void 
+selector_timeout(fd_selector s){
+    if(s == NULL)
+        return;
+    struct selector_key key = {
+        .s = s,
+    };
+    for (int i = 0; i <= s->max_fd; i++) {
+        struct item * currentItem = s->fds + i;
+        key.fd   = currentItem->fd;
+        key.data = currentItem->data;
+        if(ITEM_USED(currentItem) && currentItem->handler->handle_timeout != NULL)
+            currentItem->handler->handle_timeout(&key);
+    }
 }

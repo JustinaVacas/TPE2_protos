@@ -2,10 +2,21 @@
 #define NETUTILS_H_CTCyWGhkVt1pazNytqIRptmAi5U
 
 #include <netinet/in.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "buffer.h"
 
 #define SOCKADDR_TO_HUMAN_MIN (INET6_ADDRSTRLEN + 5 + 1)
+#define MSG_NOSIGNAL 0x4000
+
 /**
  * Describe de forma humana un sockaddr:
  *

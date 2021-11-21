@@ -1,11 +1,4 @@
-#include <stdio.h>     /* for printf */
-#include <stdlib.h>    /* for exit */
-#include <limits.h>    /* LONG_MIN et al */
-#include <string.h>    /* memset */
-#include <errno.h>
-#include <getopt.h>
-
-#include "args.h"
+#include <args.h>
 
 static unsigned short port(const char *s) {
      char *end     = 0;
@@ -21,7 +14,7 @@ static unsigned short port(const char *s) {
      return (unsigned short)sl;
 }
 
-static void user(char *s, struct users *user) {
+/* static void user(char *s, struct users *user) {
     char *p = strchr(s, ':');
     if(p == NULL) {
         fprintf(stderr, "password not found\n");
@@ -33,7 +26,7 @@ static void user(char *s, struct users *user) {
         user->pass = p;
     }
 
-}
+} */
 
 static void version(void) {
     fprintf(stderr, "Pop3filter version 0.0.0\n"
@@ -118,7 +111,7 @@ void parse_args(const int argc, char **argv, struct pop3args *args) {
                 }
                 break;
             default:
-                fprintf(stderr, "Unknown argument %d.\n", c);
+                fprintf(stderr, "Invalid options, print help using -h.\n");
                 exit(1);
         }
 

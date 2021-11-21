@@ -4,14 +4,52 @@
 #include <sys/socket.h>
 #include <stdint.h>
 
-#include "./buffer.h"
-#include "./hello.h"
-#include "./stm.h"
-#include "./selector.h"
+#include "buffer.h"
+#include "hello.h"
+#include "stm.h"
+#include "selector.h"
+#include "parser.h"
+#include "logger.h"
+#include "util.h"
 
 #define BUFFER_SIZE 64
-#define ATTACHMENT(key) ((struct socks5 *)(key)->data)
+#define ATTACHMENT(key) ((struct pop3 *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
+#define COMMANDS 12
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+struct metrics {
+    /** Para saber los bytes copiados hacia el cliente, origin y filter */
+    unsigned long long   totalBytesToOrigin;
+    unsigned long long   totalBytesToClient;
+    unsigned long long   totalBytesToFilter;
+
+    /** Para el total de bytes escritos en los buffers */
+    unsigned long long   bytesReadBuffer;
+    unsigned long long   bytesWriteBuffer;
+    unsigned long long   bytesFilterBuffer;
+
+    /** Para poder sacar el average de uso de los buffers */
+    unsigned long long   writesQtyReadBuffer;    
+    unsigned long long   writesQtyWriteBuffer;
+    unsigned long long   writesQtyFilterBuffer;
+
+    unsigned long long   readsQtyReadBuffer;    
+    unsigned long long   readsQtyWriteBuffer;
+    unsigned long long   readsQtyFilterBuffer;
+
+    unsigned long long   totalConnections;
+    unsigned long long   activeConnections;
+
+    unsigned long long   commandsFilteredQty;
+};
+
+struct metrics proxy_metrics;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /**
  * Definición de variables para cada estado
@@ -26,12 +64,30 @@ struct hello_st {
     uint8_t method;
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 /**
- * ---------------------------------------------
- * Máquina de estados general
- * ---------------------------------------------
+ * Estructura con lo necesario para parsear commands enviados por
+ * un cliente.
  */
-enum socks_v5state {
+struct request_st{
+    //queueADT            commands; 
+    bool                waitingResponse;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Máquina de estados general
+ */
+
+enum pop3_state {
+
+    RESOLVE_ORIGIN,
+    CONNECT_ORIGIN,
     /**
      * recibe el mensaje `hello` del cliente, y lo procesa
      *
@@ -43,26 +99,17 @@ enum socks_v5state {
      *   - HELLO_WRITE cuando está completo
      *   - ERROR       ante cualquier error (IO/parseo)
      */
-    HELLO_READ,
-
-    /**
-     * envía la respuesta del `hello' al cliente.
-     *
-     * Intereses:
-     *     - OP_WRITE sobre client_fd
-     *
-     * Transiciones:
-     *   - HELLO_WRITE  mientras queden bytes por enviar
-     *   - REQUEST_READ cuando se enviaron todos los bytes
-     *   - ERROR        ante cualquier error (IO/parseo)
-     */
-    HELLO_WRITE,
-
-
+    HELLO,
+    CAPA,
+    REQUEST,
+    RESPONSE,
     // estados terminales
     DONE,
-    ERROR,
+    FAILURE
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 /**
@@ -73,7 +120,8 @@ enum socks_v5state {
  * Se utiliza un contador de referencias (references) para saber cuando debemos
  * liberarlo finalmente, y un pool para reusar alocaciones previas.
  */
-struct socks5 {
+
+struct pop3 {
     /** Información del cliente */
     int client_fd;
     struct sockaddr_storage client_addr;
@@ -81,6 +129,10 @@ struct socks5 {
     /** Información del origin */
     int origin_fd;
     struct addrinfo *origin_resolution;
+    struct addrinfo *current_origin_resolution;
+
+    /** CAPA */
+    bool pipelining;
 
     /** Maquinas de estados */
     struct state_machine stm;
@@ -88,11 +140,11 @@ struct socks5 {
     /** Estados para el client_fd */
     union {
         struct hello_st hello;
-//        struct request_st request;
-//        struct copy copy;
+        struct request_st request;
     } client;
 
     /** Estados para el origin_fd */
+
 //    union{
 //        struct connecting conn;
 //        strut copy copy;
@@ -104,33 +156,18 @@ struct socks5 {
     buffer write_buffer;
     uint8_t write_buffer_space[BUFFER_SIZE];
 
+    /** Parsers */
+    struct parser * parsers[COMMANDS];
+
     /** Contador de referencias (cliente o origen que utiliza este estado)*/
     unsigned int references;
     /** Siguiente estructura */
-    struct sock *next;
+    struct pop3 *next;
 };
 
-void socks5_destroy(struct socks5 *s);
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void socksv5_pool_destroy(void);
-
-void socksv5_passive_accept(struct selector_key *key);
-
-void hello_read_init(const unsigned state, struct selector_key *key);
-
-unsigned hello_read(struct selector_key *key);
-
-unsigned hello_write(struct selector_key *key);
-
-void socksv5_done(struct selector_key *key);
-
-void socksv5_close(struct selector_key *key);
-
-void socksv5_block(struct selector_key *key);
-
-void socksv5_write(struct selector_key *key);
-
-void socksv5_read(struct selector_key *key);
-
+void pop3_passive_accept(struct selector_key *key);
 
 #endif 
