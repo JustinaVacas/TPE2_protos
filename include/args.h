@@ -27,6 +27,7 @@ struct pop3args {
     char * management_listen_address;
     uint16_t management_port;
 
+    char * origin_address;
     uint16_t origin_port;
 
     char * filter;

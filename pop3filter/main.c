@@ -57,60 +57,94 @@ main(const int argc, char *argv[]) {
     int management_ipv4 = -1;
     int management_ipv6 = -1;
 
-    // Inicializamos el servidor IPv4
-    server_ipv4 = setup_server_socket(args->pop3_listen_address, AF_INET ,args->pop3_port, IPPROTO_TCP , MAX_PENDING_CONNECTIONS, err_msg);
-	if(server_ipv4 < 0){
-        if (err_msg == NULL)
-        {
-            err_msg = "Unable to create IPv4 socket.";
+    struct in_addr a4;
+    struct in6_addr a6;
+    if (inet_pton(AF_INET, args->pop3_listen_address, &a4) == 1)
+    {
+        // Inicializamos el servidor IPv4
+        server_ipv4 = setup_server_socket(args->pop3_listen_address, AF_INET,args->pop3_port, IPPROTO_TCP , MAX_PENDING_CONNECTIONS, err_msg);
+        if(server_ipv4 < 0){
+            if (err_msg == NULL)
+            {
+                err_msg = "Unable to create IPv4 socket.";
+            }
+            goto finally;
         }
-        goto finally;
+
+        fprintf(stdout, "Listening IPv4 on port %d\n", args->pop3_port);
+    }
+
+
+    if (inet_pton(AF_INET, args->management_listen_address, &a4) == 1)
+    {
+        // Inicializamos el servidor admin IPv4
+        management_ipv4 = setup_server_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        if(management_ipv4 < 0){
+            if (err_msg == NULL)
+            {
+                err_msg = "Unable to create management IPv4 socket.";
+            }
+            goto finally;
+        }
+        fprintf(stdout, "Listening management IPv4 on port %d\n", args->management_port);
 	}
 
-    fprintf(stdout, "Listening IPv4 on port %d\n", args->pop3_port);
-
-    // Inicializamos el servidor IPv6
-    server_ipv6 = setup_server_socket(args->pop3_listen_address, AF_INET6 ,args->pop3_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
-	if(server_ipv6 < 0){
-        if (err_msg == NULL)
-        {
-            err_msg = "Unable to create IPv6 socket.";
+    if (inet_pton(AF_INET6, args->pop3_listen_address, &a6) == 1)
+    {
+        // Inicializamos el servidor IPv6
+        server_ipv6 = setup_server_socket(args->pop3_listen_address, AF_INET6, args->pop3_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        if(server_ipv6 < 0){
+            if (err_msg == NULL)
+            {
+                err_msg = "Unable to create IPv6 socket.";
+            }
+            goto finally;
         }
-        goto finally;
-	}
 
-    fprintf(stdout, "Listening IPv6 on port %d\n", args->pop3_port);
+        fprintf(stdout, "Listening IPv6 on port %d\n", args->pop3_port);
+    }
 
-    // Inicializamos el servidor admin IPv4
-    management_ipv4 = setup_server_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
-	if(server_ipv6 < 0){
-        if (err_msg == NULL)
-        {
-            err_msg = "Unable to create management IPv4 socket.";
+    if (inet_pton(AF_INET6, args->management_listen_address, &a6) == 1)
+    {
+        // Inicializamos el servidor admin IPv6
+        management_ipv6 = setup_server_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        if(management_ipv6 < 0){
+            if (err_msg == NULL)
+            {
+                err_msg = "Unable to create management IPv6 socket.";
+            }
+            goto finally;
         }
+        fprintf(stdout, "Listening management IPv6 on port %d\n", args->management_port);
+    }
+
+    if ((server_ipv4 == -1 && server_ipv6 == -1) || (management_ipv4 == -1 && management_ipv6 == -1))
+    {
+        err_msg = "Error creating sockets";
         goto finally;
-	}
-
-    fprintf(stdout, "Listening management IPv4 on port %d\n", args->management_port);
-
-    // Inicializamos el servidor admin IPv6
-    management_ipv6 = setup_server_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
-	if(management_ipv6 < 0){
-        if (err_msg == NULL)
-        {
-            err_msg = "Unable to create management IPv6 socket.";
-        }
-        goto finally;
-	}
-
-    fprintf(stdout, "Listening management IPv6 on port %d\n", args->management_port);
+    }
+    
 
     // registrar sigterm es til para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT,  sigterm_handler);
 
-    if(selector_fd_set_nio(server_ipv4) == -1 || selector_fd_set_nio(server_ipv6) == -1 || selector_fd_set_nio(management_ipv4) == -1 || selector_fd_set_nio(management_ipv6) == -1) {
+    int server = -1;
+    int management_server = -1;
+    if (server_ipv4 != -1){
+        server = server_ipv4;
+    }else{
+        server = server_ipv6;
+    }
+    if (management_ipv4!= -1){
+        management_server = management_ipv4;
+    }else{
+        management_server = management_ipv6;
+    }
+    
+
+    if(selector_fd_set_nio(server) == -1 || selector_fd_set_nio(management_server) == -1) {
         err_msg = "Error getting server socket flags";
         goto finally;
     }
@@ -146,27 +180,15 @@ main(const int argc, char *argv[]) {
         .handle_timeout    = NULL,
     };
 
-    ss = selector_register(selector, server_ipv4, &pop3_handler, OP_READ, NULL);
+    ss = selector_register(selector, server, &pop3_handler, OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
-        err_msg = "Failed to register server IPv4 fd";
+        err_msg = "Failed to register server fd";
         goto finally;
     }
 
-    ss = selector_register(selector, server_ipv6, &pop3_handler, OP_READ, NULL);
+    ss = selector_register(selector, management_server, &management_handler, OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
-        err_msg = "Failed to register server IPv6 fd";
-        goto finally;
-    }
-
-    ss = selector_register(selector, management_ipv4, &management_handler, OP_READ, NULL);
-    if(ss != SELECTOR_SUCCESS) {
-        err_msg = "Failed to register management IPv4 fd";
-        goto finally;
-    }
-
-    ss = selector_register(selector, management_ipv6, &management_handler, OP_READ, NULL);
-    if(ss != SELECTOR_SUCCESS) {
-        err_msg = "Failed to register management IPv6 fd";
+        err_msg = "Failed to register management fd";
         goto finally;
     }
 

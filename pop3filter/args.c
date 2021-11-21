@@ -28,27 +28,39 @@ static unsigned short port(const char *s) {
 
 } */
 
-static void version(void) {
-    fprintf(stderr, "Pop3filter version 0.0.0\n"
-                    "ITBA Protocolos de Comunicación 2021 -- Grupo 3\n");
+static void version(const int argc) {
+    if (argc == 2){
+        printf( 
+            "Pop3filter version 0.0.1\n"
+            "ITBA Protocolos de Comunicación 2021 -- Grupo 3\n"
+        );
+        exit(0);
+    }
+    fprintf(stderr, "Invalid use of -v option.\n");
+    exit(1);
 }
 
-static void usage(const char *progname) {
-    fprintf(stderr,
-        "\n-------------------------- HELP --------------------------\n"
-        "Usage: %s [opciones] <servidor-origen>\n"
-        "\n"
-        "   -e <archivo-de-error>           Path del archivo donde se rediecciona stderr de las ejecuciones de los filtros.\n"
-        "   -h                              Imprime la ayuda y termina.\n"
-        "   -l <dirección-pop3>             Dirección  donde servirá el proxy POP3\n"
-        "   -L <dirección-de-management>    Dirección donde servirá el  servicio  de  management.\n"
-        "   -o <puerto-de-managment>        Puerto  donde  se  encuentra  el  servidor  de  management.\n"
-        "   -p <puerto-local>               Puerto TCP donde escuchará por conexiones entrantes POP3.\n"
-        "   -P <puerto-origen>              Puerto  TCP  donde  se encuentra el servidor POP3 en el servidor origen.\n"
-        "   -t <cmd>                        Comando utilizado para las transformaciones externas.\n"
-        "   -v                              Imprime información sobre la versión versión y termina.\n"
-        "\n",
-        progname);
+static void help(const int argc) {
+    if (argc==2)
+    {
+        printf(
+            "\n-------------------------- HELP --------------------------\n"
+            "Usage: ./pop3filter [opciones] <servidor-origen>\n"
+            "\n"
+            "   -e <archivo-de-error>           Path del archivo donde se rediecciona stderr de las ejecuciones de los filtros.\n"
+            "   -h                              Imprime la ayuda y termina.\n"
+            "   -l <dirección-pop3>             Dirección  donde servirá el proxy POP3\n"
+            "   -L <dirección-de-management>    Dirección donde servirá el  servicio  de  management.\n"
+            "   -o <puerto-de-managment>        Puerto  donde  se  encuentra  el  servidor  de  management.\n"
+            "   -p <puerto-local>               Puerto TCP donde escuchará por conexiones entrantes POP3.\n"
+            "   -P <puerto-origen>              Puerto  TCP  donde  se encuentra el servidor POP3 en el servidor origen.\n"
+            "   -t <cmd>                        Comando utilizado para las transformaciones externas.\n"
+            "   -v                              Imprime información sobre la versión versión y termina.\n"
+            "\n"
+        );
+        exit(0);
+    }
+    fprintf(stderr, "Invalid use of -h option.\n");
     exit(1);
 }
 
@@ -56,6 +68,12 @@ void parse_args(const int argc, char **argv, struct pop3args *args) {
     
     memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
 
+    if (argc < 2) {
+        fprintf(stderr, "POP3 requires you to specify origin address.");
+        exit(1);
+    }
+
+    args->origin_address = argv[argc - 1];
     args->pop3_listen_address         = "0.0.0.0";
     args->pop3_port                   = 1110;
     args->management_listen_address   = "127.0.0.1";
@@ -66,18 +84,13 @@ void parse_args(const int argc, char **argv, struct pop3args *args) {
 
     int c;
 
-    while (true) {
-
-        c = getopt(argc, argv, "e:hl:L:o:p:P:t:v");
-        if (c == -1)
-            break;
-
+    while ((c=getopt(argc, argv, "e:hl:L:o:p:P:t:v")) != -1) {
         switch (c) {
             case 'e':
                 args->error_file = optarg;
                 break;
             case 'h':
-                usage(argv[0]);
+                help(argc);
                 break;
             case 'l':
                 args->pop3_listen_address = optarg;
@@ -98,8 +111,7 @@ void parse_args(const int argc, char **argv, struct pop3args *args) {
                 args->filter = optarg;
                 break;
             case 'v':
-                version();
-                exit(0);
+                version(argc);
                 break;
             case '?':
                 if(optopt == 'e' || optopt == 'l' || optopt == 'L' || optopt == 'o' || optopt == 'p' || optopt == 'P' || optopt == 't') {
@@ -116,12 +128,12 @@ void parse_args(const int argc, char **argv, struct pop3args *args) {
         }
 
     }
-    if (optind < argc) {
+    /* if (optind < argc) {
         fprintf(stderr, "Argument not accepted: ");
         while (optind < argc) {
             fprintf(stderr, "%s ", argv[optind++]);
         }
         fprintf(stderr, "\n");
         exit(1);
-    }
+    } */
 }
