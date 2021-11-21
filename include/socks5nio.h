@@ -97,17 +97,6 @@ enum pop3_state {
 
     RESOLVE_ORIGIN,
     CONNECT_ORIGIN,
-    /**
-     * recibe el mensaje `hello` del cliente, y lo procesa
-     *
-     * Intereses:
-     *     - OP_READ sobre client_fd
-     *
-     * Transiciones:
-     *   - HELLO_READ  mientras el mensaje no esté completo
-     *   - HELLO_WRITE cuando está completo
-     *   - ERROR       ante cualquier error (IO/parseo)
-     */
     HELLO,
     CAPA,
     REQUEST,

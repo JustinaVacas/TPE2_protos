@@ -26,7 +26,7 @@ static const struct state_definition client_statbl[];
 
 struct parser_definition *defs[COMMANDS];
 
-t_command commands[] = {{"CAPA"}, {"USER"}, {"PASS"}, {"QUIT"}, {"RETR"},{"LIST"},{"STAT"},{"DEL"},{"UIDL"},{"RSET"},{"NOOP"},{"TOP"}}
+t_command commands[] = {{"CAPA"}, {"USER"}, {"PASS"}, {"QUIT"}, {"RETR"},{"LIST"},{"STAT"},{"DEL"},{"UIDL"},{"RSET"},{"NOOP"},{"TOP"}};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -40,6 +40,9 @@ static struct pop3 *pool = NULL;
 
 /* Crea un proxy Pop3 */
 static struct pop3 * pop3_new(int client_fd) {
+
+    fprintf(stderr," pop3 new entrando ");
+
     struct pop3 * pop3;
     if (pool == NULL) {
         pop3 = malloc(sizeof(*pop3));
@@ -58,8 +61,10 @@ static struct pop3 * pop3_new(int client_fd) {
     pop3->stm.max_state = FAILURE;
     pop3->stm.states = client_statbl;
 
+    fprintf(stderr," pop3 smt init ");
     stm_init(&pop3->stm);
 
+    fprintf(stderr," pop3 buffers ");
     buffer_init(&pop3->read_buffer, BUFFER_SIZE, pop3->read_buffer_space);
     buffer_init(&pop3->write_buffer, BUFFER_SIZE, pop3->write_buffer_space);
     //init_parsers(pop3);
@@ -193,24 +198,32 @@ pop3_done(struct selector_key* key) {
 /** Intenta aceptar la nueva conexión entrante*/
 void
 pop3_passive_accept(struct selector_key *key) {
+    fprintf(stderr," registering client... ");
     struct sockaddr_storage  client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     struct pop3 * state = NULL;
-
-    const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
+    fprintf(stderr," acception client... ");
+    int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
 
     if(client == -1) {
         goto fail;
     }
+
+    fprintf(stderr,"fd set nio... "); 
+
     if(selector_fd_set_nio(client) == -1) {
         goto fail;
     }
+
+    fprintf(stderr," pop3 new ");
 
     state = pop3_new(client);
 
     if(state == NULL) {
         goto fail;
     }
+
+    fprintf(stderr," register ");
 
     memcpy(&state->client_addr, &client_addr, client_addr_len);
 
@@ -307,37 +320,62 @@ hello_process(const struct hello_st* d) {
 
 /** definicón de handlers para cada estado */
 static const struct state_definition client_statbl[] = {
+    //conectarse al pop3
+    {    
+        .state            = RESOLVE_ORIGIN,
+    },
+    //conectado al pop3
+    {    
+        .state            = CONNECT_ORIGIN,
+    },
+    //hago el hello
     {
         .state            = HELLO,
         .on_arrival       = hello_read_init,
         //.on_departure     = hello_read, //antes decia hello_read_close
         .on_read_ready    = hello_read,
+        //.on_write_ready   = hello_write,
+    },
+    {    
+        .state            = CAPA,
+    },
+    {    
+        .state            = REQUEST,
+    },
+    {    
+        .state            = RESPONSE,
+    },
+    {
+        .state            = DONE,
+    },
+    {
+        .state            = FAILURE,
     },
 };
 
 
 //struct parser_definition *defs[COMMANDS]; ESTA ARRIBA DEFINIDO
 
-// inicializamos los parsers de los comandos
-void init_parsers_defs(){
-	for(int i=0; i < COMMANDS; i++){
-		defs[i] = malloc(sizeof(struct parser_definition));
-        struct parser_definition parser = parser_utils_strcmpi(commands[i].name);
-        memcpy(defs[i], &parser, sizeof(struct parser_definition));
-	}
-    //H si va
-	struct parser_definition eol_def = parser_utils_strcmpi("\r\n");
-	parser * eol_parser = parser_init(parser_no_classes(), &eol_def);
-}
+// // inicializamos los parsers de los comandos
+// void init_parsers_defs(){
+// 	for(int i=0; i < COMMANDS; i++){
+// 		defs[i] = malloc(sizeof(struct parser_definition));
+//         struct parser_definition parser = parser_utils_strcmpi(commands[i].name);
+//         memcpy(defs[i], &parser, sizeof(struct parser_definition));
+// 	}
+//     //H si va
+// 	struct parser_definition eol_def = parser_utils_strcmpi("\r\n");
+// 	parser * eol_parser = parser_init(parser_no_classes(), &eol_def);
+// }
 
-void init_parsers(struct pop3* pop3_ptr){
-    for (int i = 0; i < COMMANDS; i++) {
-        pop3_ptr->parsers[i] = parser_init(parser_no_classes(), defs[i]);
-    }
-}
+// void init_parsers(struct pop3* pop3_ptr){
+//     for (int i = 0; i < COMMANDS; i++) {
+//         pop3_ptr->parsers[i] = parser_init(parser_no_classes(), defs[i]);
+//     }
+// }
 
-void reset_parsers(struct pop3* pop3_ptr){
-	for (int i = 0; i < COMMANDS; i++){
-		parser_reset(pop3_ptr->parsers[i]);
-	}
-}
+// void reset_parsers(struct pop3* pop3_ptr){
+// 	for (int i = 0; i < COMMANDS; i++){
+// 		parser_reset(pop3_ptr->parsers[i]);
+// 	}
+// }
