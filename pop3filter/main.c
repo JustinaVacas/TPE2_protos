@@ -25,6 +25,7 @@
 #include "serverutils.h"
 #include "selector.h"
 #include "socks5nio.h"
+#include "adminnio.h"
 
 #define MAX_PENDING_CONNECTIONS 20
 #define SELECTOR_INITIAL_ELEMENTS 1024
@@ -174,7 +175,7 @@ main(const int argc, char *argv[]) {
         .handle_timeout    = NULL,
     };
     const struct fd_handler management_handler = {
-        .handle_read       = NULL, //TODO: aca va la funcion de aceptar del admin
+        .handle_read       = admin_passive_accept, //TODO: aca va la funcion de aceptar del admin
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
         .handle_timeout    = NULL,
