@@ -13,14 +13,9 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <netinet/sctp.h>
 #include <sys/types.h>
-#include "proxyPopv3nio.h"
 #include "buffer.h"
 #include "logger.h"
-#include "errorslib.h"
-#include "stateMachine.h"
-#include "rap.h"
 #include "netutils.h"
 #include "./buffer.h"
 #include "./hello.h"

@@ -24,6 +24,11 @@
 
 static const struct state_definition client_statbl[];
 
+struct parser_definition *defs[COMMANDS];
+
+t_command commands[] = {{"CAPA"}, {"USER"}, {"PASS"}, {"QUIT"}, {"RETR"},{"LIST"},{"STAT"},{"DEL"},{"UIDL"},{"RSET"},{"NOOP"},{"TOP"}}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // PROXY POP3 - CREACIÓN Y DESTRUCCIÓN
 ////////////////////////////////////////////////////////////////////////////////
@@ -309,3 +314,30 @@ static const struct state_definition client_statbl[] = {
         .on_read_ready    = hello_read,
     },
 };
+
+
+//struct parser_definition *defs[COMMANDS]; ESTA ARRIBA DEFINIDO
+
+// inicializamos los parsers de los comandos
+void init_parsers_defs(){
+	for(int i=0; i < COMMANDS; i++){
+		defs[i] = malloc(sizeof(struct parser_definition));
+        struct parser_definition parser = parser_utils_strcmpi(commands[i].name);
+        memcpy(defs[i], &parser, sizeof(struct parser_definition));
+	}
+    //H si va
+	struct parser_definition eol_def = parser_utils_strcmpi("\r\n");
+	parser * eol_parser = parser_init(parser_no_classes(), &eol_def);
+}
+
+void init_parsers(struct pop3* pop3_ptr){
+    for (int i = 0; i < COMMANDS; i++) {
+        pop3_ptr->parsers[i] = parser_init(parser_no_classes(), defs[i]);
+    }
+}
+
+void reset_parsers(struct pop3* pop3_ptr){
+	for (int i = 0; i < COMMANDS; i++){
+		parser_reset(pop3_ptr->parsers[i]);
+	}
+}
