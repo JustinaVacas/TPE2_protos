@@ -1,20 +1,29 @@
-.PHONY=all test clean
-COMPILER=gcc
-CFLAGS =--std=c11 -pedantic -pedantic-errors -Wall -Wextra -Werror -Wno-unused-parameter -Wno-implicit-fallthrough -D_POSIX_C_SOURCE=200112L
-CFILES =*.c
+include Makefile.inc
 
-all:
-	pop3filter
+TARGET := pop3filter
+SOURCES := $(wildcard *.c)
+OBJECTS := $(SOURCES:.c=.o)
+rm       = rm -rf
+
+
+all: comp link
+
+comp:$(SOURCES)
+	$(CC) $(CFLAGS) -I./include -I../utils/include $(SOURCES)
+	@echo "pop3filter Compilation complete."
+
+link:$(OBJECTS)
+	$(LINKER) $(LFLAGS) $(OBJECTS) ../utils/*.o -o $(TARGET).out
+	@echo "pop3filter Linking complete."
+
+%.o : %.c
+	$(CC) $(CFLAGS) -I./include -c $< -o $@
+
+%.out : %.o
+	$(LINKER) $(LFLAGS) $< -o $@
 
 clean:
-	rm -f *.o pop3filter
-
-test:
-	for i in *_test;
-	do;
-	./$i;
-	done;
-
-pop3filter:
-	$(COMPILER) $(CFLAGS) -I../include -o pop3filter $(CFILES)
+	@$(rm) $(OBJECTS)
+	@$(rm) $(TARGET).out
+	@echo "pop3filter Cleanup complete."
 	

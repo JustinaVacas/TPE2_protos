@@ -13,7 +13,6 @@
 void
 stm_init(struct state_machine *stm) {
     // verificamos que los estados son correlativos, y que están bien asignados.
-    fprintf(stderr," entre a stm_init ");
     for(unsigned i = 0 ; i <= stm->max_state; i++) {
         if(i != stm->states[i].state) {
             abort();
@@ -37,7 +36,7 @@ handle_first(struct state_machine *stm, struct selector_key *key) {
     }
 }
 
-inline static
+
 void jump(struct state_machine *stm, unsigned next, struct selector_key *key) {
     if(next > stm->max_state) {
         abort();
@@ -68,7 +67,6 @@ stm_handler_read(struct state_machine *stm, struct selector_key *key) {
 
 unsigned
 stm_handler_write(struct state_machine *stm, struct selector_key *key) {
-    fprintf(stderr,"stm write ");
     handle_first(stm, key);
     if(stm->current->on_write_ready == 0) {
         abort();

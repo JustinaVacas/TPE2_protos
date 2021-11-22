@@ -83,4 +83,6 @@ stm_handler_block(struct state_machine *stm, struct selector_key *key);
 void
 stm_handler_close(struct state_machine *stm, struct selector_key *key);
 
+void jump(struct state_machine * stm, unsigned next, struct selector_key *key);
+
 #endif

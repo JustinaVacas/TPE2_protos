@@ -1,30 +1,66 @@
-#ifndef TPE2_PROTOS_SOCKS5NIO_H
-#define TPE2_PROTOS_SOCKS5NIO_H
+#ifndef TPE2_PROTOS_POP3PROXYNIO_H
+#define TPE2_PROTOS_POP3PROXYNIO_H
 
 #include <sys/socket.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>  // malloc
+#include <string.h>  // memset
+#include <assert.h>  // assert
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>  // close
+#include <pthread.h>
+#include <sys/queue.h>
 
+#include <arpa/inet.h>
+
+#include "request.h"
 #include "buffer.h"
-#include "hello.h"
+#include "args.h"
+#include "netutils.h"
 #include "stm.h"
 #include "selector.h"
 #include "parser.h"
 #include "logger.h"
 #include "util.h"
+#include "parser_utils.h"
 
 #define BUFFER_SIZE 64
-#define ATTACHMENT(key) ((struct pop3 *)(key)->data)
+#define ATTACHMENT(key) ((struct proxy *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define COMMANDS 12
+#define MAX_ARGS_LENGTH 40
+#define MAX_POOL 89
+#define TIMEOUT 120.0
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * Estructura con lo necesario para enviar errores al cliente.
+ */
+typedef struct error_container {
+    char * message;
+    size_t message_length;
+    size_t sended_size;
+} error_container;
 
-typedef struct t_command {
-    char * command;
-} t_command;
+/**
+ * Estructura de una sesión, guarda el nombre de usuario logeado en la sesion
+ * un bool para saber si hay un usuario logeado las representaciones en string
+ * de las direcciones utilizadas y la úĺtima vez que interaccionó la sesión.
+ */
+struct session{
+    char                name[MAX_ARGS_LENGTH + 1];
+    bool                is_auth;
+    char                origin_string[SOCKADDR_TO_HUMAN_MIN];
+    char                client_string[SOCKADDR_TO_HUMAN_MIN];
+    time_t              last_use;
+};
 
-typedef struct parser* ptr_parser;
+typedef struct command_st {
+    char * name;
+} command_st;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,24 +95,6 @@ struct metrics proxy_metrics;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/**
- * Definición de variables para cada estado
- */
-
-/** usado por HELLO_READ, HELLO_WRITE */
-struct hello_st {
-    /** buffer utilizado para I/O */
-    buffer *rb, *wb;
-    struct hello_parser parser;
-    /** el método de autenticación seleccionado */
-    uint8_t method;
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 /**
  * Estructura con lo necesario para parsear commands enviados por
  * un cliente.
@@ -86,21 +104,18 @@ struct request_st{
     bool                waitingResponse;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 /**
  * Máquina de estados general
  */
 
-enum pop3_state {
+enum proxy_state {
 
-    RESOLVE_ORIGIN,
-    CONNECT_ORIGIN,
+    RESOLVE,
+    CONNECT,
     HELLO,
     CAPA,
-    REQUEST,
-    RESPONSE,
+    COPY,
+    SEND_ERROR_MSG,
     // estados terminales
     DONE,
     FAILURE
@@ -119,7 +134,10 @@ enum pop3_state {
  * liberarlo finalmente, y un pool para reusar alocaciones previas.
  */
 
-struct pop3 {
+struct proxy {
+    /** Estructura de la sesión activa */
+    struct session session;
+
     /** Información del cliente */
     int client_fd;
     struct sockaddr_storage client_addr;
@@ -129,24 +147,22 @@ struct pop3 {
     struct addrinfo *origin_resolution;
     struct addrinfo *current_origin_resolution;
 
+    //LIST_HEAD(command_list, nodeCDT) commands;
+
     /** CAPA */
     bool pipelining;
+
+    /** Error */
+    error_container  error_sender;
 
     /** Maquinas de estados */
     struct state_machine stm;
 
-    /** Estados para el client_fd */
-    union {
-        struct hello_st hello;
-        struct request_st request;
-    } client;
-
-    /** Estados para el origin_fd */
-
-//    union{
-//        struct connecting conn;
-//        strut copy copy;
-//    } orig;
+    /** Parsers */
+    struct parser * parsers[COMMANDS];
+    struct parser * eol;
+    struct parser * eoml;
+    struct request_st request;
 
     /** Buffers */
     buffer read_buffer;
@@ -154,13 +170,10 @@ struct pop3 {
     buffer write_buffer;
     uint8_t write_buffer_space[BUFFER_SIZE];
 
-    /** Parsers */
-    ptr_parser parsers[COMMANDS];
-
     /** Contador de referencias (cliente o origen que utiliza este estado)*/
     unsigned int references;
     /** Siguiente estructura */
-    struct pop3 *next;
+    struct proxy *next;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

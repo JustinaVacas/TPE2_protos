@@ -12,7 +12,7 @@ int setup_server_socket(char * address, int family, int port, int protocol, int 
 	// Construct the server address structure
 	struct addrinfo addr_criteria;                   	// Criteria for address match
 	memset(&addr_criteria, 0, sizeof(addr_criteria)); 	// Zero out structure
-	addr_criteria.ai_family = family;             		// Address family
+	addr_criteria.ai_family = family;            		// Address family
 	addr_criteria.ai_flags = AI_PASSIVE;             	// Flags
 	addr_criteria.ai_socktype = SOCK_STREAM;         	// Only stream sockets
 	addr_criteria.ai_protocol = protocol; 

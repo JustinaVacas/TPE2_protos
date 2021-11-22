@@ -1,9 +1,13 @@
-all: pop3filter
+all:  util proxy
 
-pop3filter:
+util:
+	cd utils; make all
+
+proxy:
 	cd pop3filter; make all
 
 clean:
+	cd utils; make clean
 	cd pop3filter; make clean
 
-.PHONY: all clean pop3filter
+.PHONY: all clean

@@ -24,7 +24,7 @@
 
 #include "serverutils.h"
 #include "selector.h"
-#include "socks5nio.h"
+#include "pop3proxynio.h"
 #include "adminnio.h"
 
 #define MAX_PENDING_CONNECTIONS 20
@@ -32,6 +32,7 @@
 #define TIMEOUT 120.0
 
 static bool done = false;
+struct pop3args * args;
 
 static void
 sigterm_handler(const int signal) {
@@ -42,7 +43,7 @@ sigterm_handler(const int signal) {
 int
 main(const int argc, char *argv[]) {
     //Parseamos los argumentos
-    struct pop3args * args = malloc(sizeof(struct pop3args));
+    args = malloc(sizeof(struct pop3args));
     parse_args(argc, argv, args);
 
     // no tenemos nada que leer de stdin
@@ -197,7 +198,6 @@ main(const int argc, char *argv[]) {
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
-        fprintf(stderr,"select has something ");
         if(ss != SELECTOR_SUCCESS) {
             err_msg = "Failed serving";
             goto finally;
