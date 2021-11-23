@@ -13,6 +13,8 @@ En el directorio "pop3client" se encuentra el cliente que se comunica con el ser
 
 En el directorio "pop3filter" se encuentra el proxy POP3.
 
+El informe se encuentra en la carpeta principal con el nombre de TPE2_-_Informe.pdf
+
 ## Compilacion
 
 Para compilar y ejecutar, correr el comando "make" en /TPE2_PROTOS
