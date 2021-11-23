@@ -15,7 +15,7 @@
 #include "buffer.h"
 
 #define SOCKADDR_TO_HUMAN_MIN (INET6_ADDRSTRLEN + 5 + 1)
-#define MSG_NOSIGNAL 0x4000
+//#define MSG_NOSIGNAL 0x4000
 
 /**
  * Describe de forma humana un sockaddr:

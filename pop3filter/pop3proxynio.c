@@ -593,7 +593,7 @@ static unsigned hello_write(struct selector_key* key) {
 *   Toma la request del usuario y guarda los comandos encontrados en una cola.
 */
 static unsigned read_request (struct selector_key* key) {
-    log(DEBUG, "Reading client request...", NULL);
+    //log(DEBUG, "Reading client request...", NULL);
     struct proxy *proxy = ATTACHMENT(key);
     size_t nbytes;
     uint8_t* write_ptr = buffer_write_ptr(&proxy->read_buffer, &nbytes);
@@ -675,7 +675,7 @@ static void set_user_name(struct proxy* proxy, uint8_t * command, uint8_t lenght
 *   Enviamos la request del usuario al origin.
 */
 static unsigned write_request(struct selector_key* key){
-    log(DEBUG, "Sending client request to origin...", NULL);
+    //log(DEBUG, "Sending client request to origin...", NULL);
     struct proxy *proxy = ATTACHMENT(key);
     size_t nbytes;
     uint8_t * read_ptr = buffer_read_ptr(&proxy->read_buffer, &nbytes);
@@ -718,7 +718,7 @@ static unsigned write_request(struct selector_key* key){
 ////////////////////////////////////////////////////////////////////////////////
 
 static void set_response(const unsigned state, struct selector_key* key){
-    log(DEBUG, "Setting response...", NULL);
+    //log(DEBUG, "Setting response...", NULL);
     struct proxy *proxy = ATTACHMENT(key);
     if (!proxy->capa.checked)
     {
@@ -727,7 +727,7 @@ static void set_response(const unsigned state, struct selector_key* key){
     }
 }
 static unsigned read_response(struct selector_key* key) {
-    log(DEBUG, "Reading response from origin...", NULL);
+    //log(DEBUG, "Reading response from origin...", NULL);
     struct proxy *proxy = ATTACHMENT(key);
     size_t nbytes;
     uint8_t* write_ptr = buffer_write_ptr(&proxy->write_buffer, &nbytes);
@@ -784,7 +784,7 @@ static unsigned read_response(struct selector_key* key) {
 }
 
 static unsigned write_response(struct selector_key* key) {
-    log(DEBUG, "Sending response to client...", NULL);
+    //log(DEBUG, "Sending response to client...", NULL);
     struct proxy * proxy = ATTACHMENT(key);
     size_t nbytes;
     uint8_t* read_ptr = buffer_read_ptr(&proxy->write_buffer, &nbytes);
@@ -828,7 +828,7 @@ static unsigned write_response(struct selector_key* key) {
     // Si no hay mas comandos en la cola vuelve a esperar request del cliente
     log(DEBUG, "Command queue size = %d", proxy->request.commands->size);
     if(is_empty(proxy->request.commands)) {
-        log(DEBUG, "Waiting for request again...", NULL);
+        //log(DEBUG, "Waiting for request again...", NULL);
         if(selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_NOOP) != SELECTOR_SUCCESS)
             return FAILURE;
         buffer_reset(&proxy->read_buffer);
@@ -838,7 +838,7 @@ static unsigned write_response(struct selector_key* key) {
     if (selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_WRITE) != SELECTOR_SUCCESS)
         return FAILURE;
 
-    log(DEBUG, "Going for next command...", NULL);
+    //log(DEBUG, "Going for next command...", NULL);
     return REQUEST;
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -846,7 +846,7 @@ static unsigned write_response(struct selector_key* key) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static unsigned capa_read(struct selector_key* key) {
-    log(DEBUG, "Reading CAPA from origin...", NULL);
+    //log(DEBUG, "Reading CAPA from origin...", NULL);
     struct proxy * proxy = ATTACHMENT(key);
     size_t nbytes;
     uint8_t * write_ptr = buffer_write_ptr(&proxy->write_buffer, &nbytes);
@@ -874,7 +874,7 @@ static unsigned capa_read(struct selector_key* key) {
         if(!proxy->capa.pipelining && !error ) {
             const struct parser_event * pipelining_state = parser_feed(proxy->capa.capa_parser, write_ptr[i]);
             if(pipelining_state->type == STRING_CMP_EQ) {
-                log(DEBUG, "PIPELINING found!", NULL);
+                //log(DEBUG, "PIPELINING found!", NULL);
                 proxy->capa.pipelining = true;
             } else if(pipelining_state->type == STRING_CMP_NEQ) {
                 parser_reset(proxy->capa.capa_parser);
@@ -886,7 +886,7 @@ static unsigned capa_read(struct selector_key* key) {
             if (!error)
             {
                 if(!proxy->capa.pipelining) {
-                    log(DEBUG, "not PIPELINING found", NULL);
+                    //log(DEBUG, "not PIPELINING found", NULL);
                     proxy->response.add_pipelining = "PIPELINING\r\n.\r\n";
                     proxy->response.add_lenght = 13;
                 } else{
@@ -901,7 +901,7 @@ static unsigned capa_read(struct selector_key* key) {
             proxy->response.read_complete = true;
             proxy->capa.checked = true;
             buffer_write_adv(&proxy->write_buffer, message_size);
-            log(DEBUG, "CAPA checked!", NULL);
+            //log(DEBUG, "CAPA checked!", NULL);
             return RESPONSE;
             
         } else if(end_state->type == STRING_CMP_NEQ) {
@@ -916,7 +916,7 @@ static unsigned capa_read(struct selector_key* key) {
     
     // Si no hay mas lugar en el buffer y no se encontro el EOL, se envia el mensaje y se recibe de nuevo del origen lo que queda del comando CAPA
     if (!buffer_can_write(&proxy->write_buffer)){ 
-        log(DEBUG, "CAPA not checked cause full buffer...", NULL);
+        //log(DEBUG, "CAPA not checked cause full buffer...", NULL);
         if (selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS || selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS)
             return FAILURE;
         proxy->response.return_state = CAPA;
