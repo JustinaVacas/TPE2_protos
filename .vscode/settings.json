@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "adminnio.h": "c",
+        "pop3client.h": "c",
+        "client_args.h": "c"
+    }
+}

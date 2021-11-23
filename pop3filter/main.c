@@ -29,7 +29,9 @@
 
 #define MAX_PENDING_CONNECTIONS 20
 #define SELECTOR_INITIAL_ELEMENTS 1024
-#define TIMEOUT 120.0
+//#define TIMEOUT 120.0
+
+float time_out = 120.0;
 
 static bool done = false;
 struct pop3args * args;
@@ -80,7 +82,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET, args->management_listen_address, &a4) == 1)
     {
         // Inicializamos el servidor admin IPv4
-        management_ipv4 = setup_server_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv4 = setup_server_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv4 < 0){
             if (err_msg == NULL)
             {
@@ -109,7 +111,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET6, args->management_listen_address, &a6) == 1)
     {
         // Inicializamos el servidor admin IPv6
-        management_ipv6 = setup_server_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv6 = setup_server_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv6 < 0){
             if (err_msg == NULL)
             {
@@ -176,7 +178,7 @@ main(const int argc, char *argv[]) {
         .handle_timeout    = NULL,
     };
     const struct fd_handler management_handler = {
-        //.handle_read       = admin_passive_accept, //TODO: aca va la funcion de aceptar del admin
+        .handle_read       = admin_passive_accept, //TODO: aca va la funcion de aceptar del admin
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
         .handle_timeout    = NULL,
@@ -194,7 +196,7 @@ main(const int argc, char *argv[]) {
         goto finally;
     }
 
-    //time_t lastTimeout = time(NULL);
+    time_t lastTimeout = time(NULL);
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
@@ -202,11 +204,11 @@ main(const int argc, char *argv[]) {
             err_msg = "Failed serving";
             goto finally;
         }
-        // time_t current = time(NULL);
-        // if(difftime(current, lastTimeout) >= TIMEOUT/4) {
-        //     lastTimeout = current;
-        //     selector_timeout(selector);
-        // }
+        time_t current = time(NULL);
+        if(difftime(current, lastTimeout) >= time_out/4) {
+            lastTimeout = current;
+            selector_timeout(selector);
+        }
     }
     if(err_msg == NULL) {
         err_msg = "Closing...";

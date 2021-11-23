@@ -10,6 +10,10 @@ struct nodeCDT {
     LIST_ENTRY(nodeCDT) pointers;
 };
 
+size_t historic_connections = 0;
+size_t current_connections = 0;
+size_t transferred_bytes = 0;
+
 static const struct state_definition client_statbl[];
 
 command_st commands[] = {{"CAPA"}, {"USER "}, {"PASS "}, {"QUIT"}, {"RETR "},{"LIST"},{"STAT"},{"DEL"},{"UIDL"},{"RSET"},{"NOOP"},{"TOP"}};
