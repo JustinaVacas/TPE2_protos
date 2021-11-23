@@ -1,8 +1,15 @@
 # TPE2_protos
 
+*Este es un trabajo práctico para la materia Protocolos de Comunicación 2C 2021*
+
+## Alumnos:
+  - Ian Mejalelaty
+  - Josefina Assaff
+  - Justina Vacas Castro
+
 ## Contenido
 
-En el directorio "pop3ctl" se encuentra el cliente que se comunica con el servidor admin.
+En el directorio "pop3client" se encuentra el cliente que se comunica con el servidor admin.
 
 En el directorio "pop3filter" se encuentra el proxy POP3.
 
