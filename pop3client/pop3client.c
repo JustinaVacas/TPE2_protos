@@ -116,7 +116,7 @@ int main(int argc, char* argv[]){
     }
     memcpy(request, client_args->admin_auth, 5);
 
-    log(DEBUG,"Client connect to %s:%d using token %s\n",
+    log(DEBUG,"Client connect to %s:%d using auth %s\n",
         client_args->admin_server_address, client_args->admin_server_port, client_args->admin_auth);
 
     // Socket UDP

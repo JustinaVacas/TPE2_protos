@@ -8,7 +8,7 @@ static void help(const int argc) {
             "Usage: ./pop3client [opciones] <servidor-admin>\n"
             "\n"
             "  -h                            Imprime la ayuda y termina.\n"
-            "  -t                            Admin token [REQUIRED]\n "
+            "  -t                            Admin auth [REQUIRED]\n "
             "  -P <puerto-admin>             Puerto  donde  se  encuentra  el  servidor  admin.\n"
             "\n"
         );
