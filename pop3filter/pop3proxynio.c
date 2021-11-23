@@ -9,6 +9,10 @@
                 ||  (command.type == CMD_RETR && args)         \
                 ||  (command.type == CMD_UIDL && !args)) 
 
+size_t historic_connections = 0;
+size_t current_connections = 0;
+size_t transferred_bytes = 0;
+
 static const struct state_definition client_statbl[];
 
 command_st commands[] = {{"USER", CMD_USER}, {"PASS", CMD_PASS}, {"QUIT", CMD_QUIT}, {"RETR", CMD_RETR},{"LIST", CMD_LIST},{"CAPA", CMD_CAPA},{"TOP", CMD_TOP},{"UIDL", CMD_UIDL},{"STAT", CMD_STAT}};

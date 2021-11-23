@@ -29,7 +29,9 @@
 
 #define MAX_PENDING_CONNECTIONS 20
 #define SELECTOR_INITIAL_ELEMENTS 1024
-#define TIMEOUT 120.0
+//#define TIMEOUT 120.0
+
+float time_out = 120.0;
 
 static bool done = false;
 struct pop3args * args;
@@ -187,7 +189,7 @@ main(const int argc, char *argv[]) {
         .handle_timeout    = NULL,
     };
     const struct fd_handler management_handler = {
-        //.handle_read       = admin_passive_accept, //TODO: aca va la funcion de aceptar del admin
+        .handle_read       = admin_passive_accept, //TODO: aca va la funcion de aceptar del admin
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
         .handle_timeout    = NULL,
@@ -207,7 +209,7 @@ main(const int argc, char *argv[]) {
 
     initialize_parser_definitions();
 
-    //time_t lastTimeout = time(NULL);
+    time_t lastTimeout = time(NULL);
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
@@ -215,11 +217,11 @@ main(const int argc, char *argv[]) {
             err_msg = "Failed serving";
             goto finally;
         }
-        // time_t current = time(NULL);
-        // if(difftime(current, lastTimeout) >= TIMEOUT/4) {
-        //     lastTimeout = current;
-        //     selector_timeout(selector);
-        // }
+        time_t current = time(NULL);
+        if(difftime(current, lastTimeout) >= time_out/4) {
+            lastTimeout = current;
+            selector_timeout(selector);
+        }
     }
     if(err_msg == NULL) {
         err_msg = "Closing...";

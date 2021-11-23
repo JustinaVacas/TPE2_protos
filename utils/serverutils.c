@@ -11,11 +11,17 @@ int create_socket(char * address, int family, int port, int protocol, int max_pe
 	// Construct the server address structure
 	struct addrinfo addr_criteria;                   	// Criteria for address match
 	memset(&addr_criteria, 0, sizeof(addr_criteria)); 	// Zero out structure
-	addr_criteria.ai_family = family;            		// Address family
+	addr_criteria.ai_family = family;             		// Address family
 	addr_criteria.ai_flags = AI_PASSIVE;             	// Flags
-	addr_criteria.ai_socktype = SOCK_STREAM;         	// Only stream sockets
 	addr_criteria.ai_protocol = protocol; 
 	
+	if (protocol == IPPROTO_TCP) {
+		addr_criteria.ai_socktype = SOCK_STREAM;		// Only stream sockets
+
+	} else {
+		addr_criteria.ai_socktype = SOCK_DGRAM;
+	}
+
 	// Buscamos addr que matcheen con los criterios
 	struct addrinfo* serveraddr;
 	memset(&serveraddr, 0, sizeof(serveraddr));
@@ -36,12 +42,12 @@ int create_socket(char * address, int family, int port, int protocol, int max_pe
 
 		// Create socket
 		//log(INFO, "\nCreating socket %s","...");
-		server = socket(family, SOCK_STREAM, protocol);
+		server = socket(family, addr_criteria.ai_socktype, protocol);
 		if (server < 0) {
 			sprintf(err_msg, "Cant't create socket on %s : %s ", printAddressPort(addr, addrBuffer), strerror(errno));  
 			continue;
 		}
-
+		
 		if(setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int) {1}, sizeof(int)) < 0 )
 		{
 			err_msg = "Set socket options failed";
@@ -49,7 +55,7 @@ int create_socket(char * address, int family, int port, int protocol, int max_pe
 			server = -1;
 			continue;
 		}
-
+		
 		if(family == AF_INET6 && setsockopt(server, IPPROTO_IPV6, IPV6_V6ONLY, &(int) {1}, sizeof(int)) < 0 )
 		{
 			err_msg = "Set socket options for IPv6 failed";
@@ -66,7 +72,8 @@ int create_socket(char * address, int family, int port, int protocol, int max_pe
 				printSocketAddress((struct sockaddr *) &localAddr, addrBuffer);
 				log(INFO, "Binding to %s", addrBuffer);
 			}
-		} else {
+		}
+		if ((bind(server, addr->ai_addr, addr->ai_addrlen) == 0) && (listen(server, max_pending_connections) != 0) && (protocol == IPPROTO_TCP)) {
 			sprintf(err_msg, "Cant't bind %s", strerror(errno));  
 			close(server);  // Close and try with the next one
 			server = -1;
