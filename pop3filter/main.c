@@ -49,6 +49,17 @@ main(const int argc, char *argv[]) {
     // no tenemos nada que leer de stdin
     close(STDIN_FILENO);
 
+    //redirigimos stderr al archivo que nos pasaron o por defecto a /dev/null
+    /*
+    FILE * error_file = NULL;
+    if ((error_file = fopen(args->error_file,"w") == NULL)
+    {
+        log(FATAL, "Can't open stderr file %s", args->error_file);
+        exit(1);
+    }
+    dup2(fileno(error_file), STDERR_FILENO);
+    */
+
     char * err_msg            = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
@@ -64,7 +75,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET, args->pop3_listen_address, &a4) == 1)
     {
         // Inicializamos el servidor IPv4
-        server_ipv4 = setup_server_socket(args->pop3_listen_address, AF_INET,args->pop3_port, IPPROTO_TCP , MAX_PENDING_CONNECTIONS, err_msg);
+        server_ipv4 = create_socket(args->pop3_listen_address, AF_INET,args->pop3_port, IPPROTO_TCP , MAX_PENDING_CONNECTIONS, err_msg);
         if(server_ipv4 < 0){
             if (err_msg == NULL)
             {
@@ -80,7 +91,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET, args->management_listen_address, &a4) == 1)
     {
         // Inicializamos el servidor admin IPv4
-        management_ipv4 = setup_server_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv4 = create_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv4 < 0){
             if (err_msg == NULL)
             {
@@ -94,7 +105,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET6, args->pop3_listen_address, &a6) == 1)
     {
         // Inicializamos el servidor IPv6
-        server_ipv6 = setup_server_socket(args->pop3_listen_address, AF_INET6, args->pop3_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        server_ipv6 = create_socket(args->pop3_listen_address, AF_INET6, args->pop3_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
         if(server_ipv6 < 0){
             if (err_msg == NULL)
             {
@@ -109,7 +120,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET6, args->management_listen_address, &a6) == 1)
     {
         // Inicializamos el servidor admin IPv6
-        management_ipv6 = setup_server_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv6 = create_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv6 < 0){
             if (err_msg == NULL)
             {
@@ -193,6 +204,8 @@ main(const int argc, char *argv[]) {
         err_msg = "Failed to register management fd";
         goto finally;
     }
+
+    initialize_parser_definitions();
 
     //time_t lastTimeout = time(NULL);
     for(;!done;) {

@@ -3,40 +3,64 @@
  */
 #include <pop3proxynio.h>
 
-struct nodeCDT {
-    int command;
-    uint8_t command_len;
-    bool has_args;
-    LIST_ENTRY(nodeCDT) pointers;
-};
+#define IS_MULTILINE(command, args) (command.type == CMD_CAPA       \
+                ||  (command.type == CMD_LIST && !args)         \
+                ||  (command.type == CMD_TOP  && args)         \
+                ||  (command.type == CMD_RETR && args)         \
+                ||  (command.type == CMD_UIDL && !args)) 
 
 static const struct state_definition client_statbl[];
 
-command_st commands[] = {{"CAPA"}, {"USER "}, {"PASS "}, {"QUIT"}, {"RETR "},{"LIST"},{"STAT"},{"DEL"},{"UIDL"},{"RSET"},{"NOOP"},{"TOP"}};
+command_st commands[] = {{"USER", CMD_USER}, {"PASS", CMD_PASS}, {"QUIT", CMD_QUIT}, {"RETR", CMD_RETR},{"LIST", CMD_LIST},{"CAPA", CMD_CAPA},{"TOP", CMD_TOP},{"UIDL", CMD_UIDL},{"STAT", CMD_STAT}};
 
+static unsigned set_error_msg(struct proxy *proxy, char * message);
+
+////////////////////////////////////////////////////////////////////////////////
+// PARSERS
+////////////////////////////////////////////////////////////////////////////////
 struct parser_definition * def[COMMANDS];
 struct parser_definition * eol_def;
 struct parser_definition * eoml_def;
+struct parser_definition * capa_def;
 
-void initialize_parsers(struct proxy * proxy) {
+void initialize_parser_definitions() {
     // inicializamos los parsers de los comandos y los EOL
 	for (int i = 0; i < COMMANDS; i++)
     {
         def[i] = malloc(sizeof(struct parser_definition));
         struct parser_definition aux = parser_utils_strcmpi(commands[i].name);
         memcpy(def[i], &aux, sizeof(struct parser_definition));
-        proxy->parsers[i] = parser_init(parser_no_classes(), def[i]);
     }
 
     eol_def = malloc(sizeof(struct parser_definition));
     struct parser_definition aux2 = parser_utils_strcmpi("\r\n");
     memcpy(eol_def, &aux2, sizeof(struct parser_definition));
-    proxy->eol = parser_init(parser_no_classes(), eol_def);
 
     eoml_def = malloc(sizeof(struct parser_definition));
     struct parser_definition aux3 = parser_utils_strcmpi("\r\n.\r\n");
     memcpy(eoml_def, &aux3, sizeof(struct parser_definition));
+
+    capa_def = malloc(sizeof(struct parser_definition));
+    struct parser_definition aux4 = parser_utils_strcmpi("\r\nPIPELINING\r\n");
+    memcpy(capa_def, &aux4, sizeof(struct parser_definition));
+}
+
+void initialize_parsers(struct proxy * proxy) {
+    for (int i = 0; i < COMMANDS; i++)
+    {
+        proxy->parsers[i] = parser_init(parser_no_classes(), def[i]);
+        proxy->request.command_state[i] = 1;
+    }
+    proxy->eol = parser_init(parser_no_classes(), eol_def);
     proxy->eoml = parser_init(parser_no_classes(), eoml_def);
+    proxy->capa.capa_parser = parser_init(parser_no_classes(), capa_def);
+}
+
+static void reset_command_parsers(struct proxy * proxy) {
+    for (int i = 0; i < COMMANDS; i++) {
+        parser_reset(proxy->parsers[i]);
+        proxy->request.command_state[i] = 1;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -51,22 +75,26 @@ static struct proxy *pool = NULL;
 static struct proxy * proxy_new(int client_fd) {
 
     struct proxy * proxy;
+    command_queue * commands;
     log(INFO, "Creating new proxy for client_id: %d", client_fd);
 
     if (pool == NULL) {
-        proxy = malloc(sizeof(*proxy));
+        proxy = malloc(sizeof(*proxy));     
+        commands = new_command_queue();
     }
     else {
-        proxy = pool;
-        pool = pool->next;
+        proxy       = pool;
+        pool        = pool->next;
         proxy->next = 0;
+        commands    = proxy->request.commands;
     }
-
     memset(proxy, 0x00, sizeof(*proxy));
     proxy->client_fd = client_fd;
     proxy->origin_fd = -1;
-    proxy->pipelining = false;
     proxy->session.last_use = time(NULL);
+    proxy->request.commands = commands;
+    proxy->session.is_auth = false;
+    proxy->capa.pipelining = false;
 
     proxy->stm.initial = RESOLVE;
     proxy->stm.max_state = FAILURE;
@@ -450,10 +478,7 @@ static unsigned connect_fqdn(struct selector_key* key) {
     
     if(sock == -1) {
         log(ERROR, "Client %s could not connect to origin %s:%d",proxy->session.client_string, args->origin_address, args->origin_port);
-        proxy->error_sender.message = "-ERR Connection refused.\r\n";
-        if (selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS)
-            return FAILURE;
-        return SEND_ERROR_MSG;
+        return set_error_msg(proxy, "-ERR Connection refused.\r\n");
     }
 
     return CONNECT;
@@ -477,11 +502,7 @@ static unsigned connection_ready(struct selector_key* key) {
         if (proxy->current_origin_resolution == NULL)
         {
             log(ERROR, "Problem connecting to origin server. Client Address: %s", proxy->session.client_string);
-            proxy->error_sender.message = "-ERR Connection refused.\r\n";
-            if(selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS)
-                return FAILURE;
-
-            return SEND_ERROR_MSG;
+            return set_error_msg(proxy, "-ERR Connection refused.\r\n");
         }
         return connect_fqdn(key);
 
@@ -515,11 +536,7 @@ static unsigned hello_read(struct selector_key *key) {
 
     if (n <= 0) { 
         log(ERROR, "Error in HELLO. Client Address: %s", proxy->session.client_string);
-        proxy->error_sender.message = "-ERR\r\n";
-        if (selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS)
-            return FAILURE;
-        
-        return SEND_ERROR_MSG;
+        return set_error_msg(proxy, "-ERR failed reading hello from client\r\n");
     }
 
     for(int i = 0; i < n; i++) {
@@ -548,11 +565,7 @@ static unsigned hello_write(struct selector_key* key) {
 
     if(n <= 0) {
         log(ERROR, "Initial hello has an error. Client Address: %s", proxy->session.client_string);
-        proxy->error_sender.message = "-ERR\r\n";
-        if (selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS)
-            return FAILURE;
-        
-        return SEND_ERROR_MSG;
+        return set_error_msg(proxy, "-ERR failed sending hello from origin\r\n");
     }
 
     buffer_read_adv(&proxy->write_buffer, n);
@@ -563,14 +576,364 @@ static unsigned hello_write(struct selector_key* key) {
             
             return FAILURE;
         }
-        return COPY;
+        buffer_reset(&proxy->write_buffer);
+        return REQUEST;
     }
     return HELLO;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// REQUEST
+////////////////////////////////////////////////////////////////////////////////
+/*
+*   Toma la request del usuario y guarda los comandos encontrados en una cola.
+*/
+static unsigned read_request (struct selector_key* key) {
+    log(DEBUG, "Reading client request...", NULL);
+    struct proxy *proxy = ATTACHMENT(key);
+    size_t nbytes;
+    uint8_t* write_ptr = buffer_write_ptr(&proxy->read_buffer, &nbytes);
+    
+    ssize_t n = recv(proxy->client_fd, write_ptr, nbytes, 0);
+
+    if (n < 0) {
+        return set_error_msg(proxy, "-ERR failed reading request from client");
+    } else if (n == 0) {
+        log(INFO, "Client %s disconnected", proxy->session.client_string);
+        return DONE;
+    }
+
+    int command_found = -1;
+    int command_lenght = 0;
+    bool args = false;
+    for(int i = 0; i < n; i++) {
+        const struct parser_event* eol_state = parser_feed(proxy->eol, write_ptr[i]);
+        if (eol_state->type == STRING_CMP_EQ) {
+            if (command_found != -1)
+            {
+                log(DEBUG, "Command %d found", command_found);
+                command_node * node = malloc(sizeof(command_node));
+                node->command = command_found;
+                node->lenght = i + 1 - command_lenght;
+                node->has_args = args;
+                enqueue(proxy->request.commands, node);
+                command_lenght = i + 1;
+                command_found = -1;
+                args = false;
+            }
+            reset_command_parsers(proxy);
+            parser_reset(proxy->eol);
+            continue;
+
+        } else if (eol_state->type == STRING_CMP_NEQ) {
+            parser_reset(proxy->eol);
+        }
+        if (command_found == -1) {
+            for (int command = 0; command < COMMANDS; command++) {
+                if (proxy->request.command_state[command]) {
+                    const struct parser_event * command_state = parser_feed(proxy->parsers[command], write_ptr[i]);
+                    if(command_state->type == STRING_CMP_EQ) {
+                        command_found = command;
+                    } else if(command_state->type == STRING_CMP_NEQ) {
+                        proxy->request.command_state[command] = 0;
+                    }
+                }
+            }
+        }else if (write_ptr[i] == ' ' && write_ptr[i+1] != '\r') {
+            args = true;
+        }
+    }
+
+    buffer_write_adv(&proxy->read_buffer, n);
+    proxy_metrics.bytesReadBuffer += n;
+    proxy_metrics.writesQtyReadBuffer++;
+
+    if(!is_empty(proxy->request.commands)){
+        if(selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_WRITE) != SELECTOR_SUCCESS)
+            return FAILURE;
+    }
+    
+    return REQUEST;
+}
+
+static void set_user_name(struct proxy* proxy, uint8_t * command, uint8_t lenght){
+    uint8_t i;
+    for(i = 0; i < lenght; i++){
+        if(command[i] == ' ')
+            break;
+    }
+
+    memcpy(proxy->session.name, command+i+1, lenght-i-2);
+    proxy->session.name[lenght-i-3] = '\0';
+}
+
+/*
+*   Enviamos la request del usuario al origin.
+*/
+static unsigned write_request(struct selector_key* key){
+    log(DEBUG, "Sending client request to origin...", NULL);
+    struct proxy *proxy = ATTACHMENT(key);
+    size_t nbytes;
+    uint8_t * read_ptr = buffer_read_ptr(&proxy->read_buffer, &nbytes);
+
+    command_node * node = peek(proxy->request.commands);
+
+    if(node->command == CMD_USER && proxy->session.is_auth == false && node->has_args) {
+        set_user_name(proxy, read_ptr, node->lenght);
+    }
+
+    ssize_t n = send(key->fd, read_ptr, node->lenght, MSG_NOSIGNAL);
+    if(n <= 0) {
+        return set_error_msg(proxy, "-ERR failed sending request to origin");
+    }
+
+    buffer_read_adv(&proxy->read_buffer, n);
+
+    proxy_metrics.readsQtyReadBuffer++;
+    proxy_metrics.totalBytesToOrigin += n;
+
+    if (n == node->lenght) {
+        dequeue(proxy->request.commands);
+        if(selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->client_fd, OP_NOOP) != SELECTOR_SUCCESS){
+            return FAILURE;
+        }
+        proxy->response.command = node->command;
+        proxy->response.has_args = node->has_args;
+        proxy->response.read_init = false;
+        free(node);
+        buffer_reset(&proxy->read_buffer);
+        return (proxy->response.command == CMD_CAPA && !proxy->capa.checked) ? CAPA : RESPONSE;
+    }
+    // Por si faltó mandar una parte...
+    node->lenght -= n;
+    return REQUEST;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// RESPONSE
+////////////////////////////////////////////////////////////////////////////////
+
+static void set_response(const unsigned state, struct selector_key* key){
+    log(DEBUG, "Setting response...", NULL);
+    struct proxy *proxy = ATTACHMENT(key);
+    if (!proxy->capa.checked)
+    {
+        proxy->response.add_lenght = 0;
+        proxy->response.add_pipelining = NULL;
+    }
+}
+static unsigned read_response(struct selector_key* key) {
+    log(DEBUG, "Reading response from origin...", NULL);
+    struct proxy *proxy = ATTACHMENT(key);
+    size_t nbytes;
+    uint8_t* write_ptr = buffer_write_ptr(&proxy->write_buffer, &nbytes);
+
+
+    ssize_t n = recv(proxy->origin_fd, write_ptr, nbytes, 0);
+    if (n <= 0) {
+        return set_error_msg(proxy, "-ERR reading response from origin");
+    }
+
+    if (!proxy->response.read_init) {
+        proxy->response.read_init = true;
+        proxy->response.read_complete = false;
+        proxy->response.return_state = RESPONSE;
+        proxy->response.eol_parser = proxy->eol;
+        
+        if (write_ptr[0] == '+') {
+            if (proxy->response.command == CMD_PASS)
+                proxy->session.is_auth = true;
+            
+            if (IS_MULTILINE(commands[proxy->response.command], proxy->response.has_args))
+               proxy->response.eol_parser = proxy->eoml;
+        }
+    }
+
+    for(int i = 0; i < n; i++) {
+        const struct parser_event* eol_state = parser_feed(proxy->response.eol_parser, write_ptr[i]);
+      
+        if(eol_state->type == STRING_CMP_EQ) {
+            proxy->response.read_complete = true;
+            proxy->response.add_lenght = 0;
+            proxy->response.add_pipelining = NULL;
+
+            parser_reset(proxy->response.eol_parser);
+            proxy->response.read_init = false;
+            proxy->response.read_complete = true;
+            break;
+        } else if(eol_state->type == STRING_CMP_NEQ) {
+            parser_reset(proxy->response.eol_parser);
+            if (write_ptr[i] == '\r')
+                parser_feed(proxy->response.eol_parser, '\r');
+        }
+    }
+
+    buffer_write_adv(&proxy->write_buffer, n);
+        
+    if(proxy->response.read_complete || !buffer_can_write(&proxy->write_buffer)) {
+        if(selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS)
+            return FAILURE;
+        return RESPONSE;
+    }
+    
+    return RESPONSE;
+}
+
+static unsigned write_response(struct selector_key* key) {
+    log(DEBUG, "Sending response to client...", NULL);
+    struct proxy * proxy = ATTACHMENT(key);
+    size_t nbytes;
+    uint8_t* read_ptr = buffer_read_ptr(&proxy->write_buffer, &nbytes);
+
+    ssize_t n = send(key->fd, read_ptr, nbytes, MSG_NOSIGNAL);
+    if(n <= 0){
+        return set_error_msg(proxy, "-ERR writing response to client");
+    }
+    proxy_metrics.readsQtyWriteBuffer++;
+    proxy_metrics.totalBytesToClient += n;
+
+    buffer_read_adv(&proxy->write_buffer, n);
+
+    // Por si quedó algo por escribir...
+    if (buffer_can_read(&proxy->write_buffer))
+    {
+        return RESPONSE;
+    }
+    // Volvemos al READ para continuar con lo que queda leer...
+    if(!proxy->response.read_complete){
+        log(DEBUG, "Response not fully readed... returning to %d", proxy->response.return_state);
+        if(selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_READ) != SELECTOR_SUCCESS)
+            return FAILURE;
+        buffer_reset(&proxy->write_buffer);
+        log(DEBUG, "Going to %d", proxy->response.return_state);
+        return proxy->response.return_state;
+    }
+
+    if(proxy->response.command == CMD_QUIT){
+        return DONE;
+    }
+
+    // Agregamos PIPELINING al comando CAPA
+    if (proxy->response.command == CMD_CAPA && proxy->response.add_lenght != 0) {
+        ssize_t extra = send(key->fd, proxy->response.add_pipelining, proxy->response.add_lenght, MSG_NOSIGNAL);
+        if(extra <= 0)
+            return set_error_msg(proxy, "-ERR writing response to client");
+        proxy_metrics.totalBytesToClient += n;
+    }
+
+    // Si no hay mas comandos en la cola vuelve a esperar request del cliente
+    log(DEBUG, "Command queue size = %d", proxy->request.commands->size);
+    if(is_empty(proxy->request.commands)) {
+        log(DEBUG, "Waiting for request again...", NULL);
+        if(selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_NOOP) != SELECTOR_SUCCESS)
+            return FAILURE;
+        buffer_reset(&proxy->read_buffer);
+        return REQUEST;
+    }
+
+    if (selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS || selector_set_interest(key->s, proxy->origin_fd, OP_WRITE) != SELECTOR_SUCCESS)
+        return FAILURE;
+
+    log(DEBUG, "Going for next command...", NULL);
+    return REQUEST;
+}
+////////////////////////////////////////////////////////////////////////////////
+// CAPABILITIES (CAPA)
+////////////////////////////////////////////////////////////////////////////////
+
+static unsigned capa_read(struct selector_key* key) {
+    log(DEBUG, "Reading CAPA from origin...", NULL);
+    struct proxy * proxy = ATTACHMENT(key);
+    size_t nbytes;
+    uint8_t * write_ptr = buffer_write_ptr(&proxy->write_buffer, &nbytes);
+    
+    ssize_t n = recv(proxy->origin_fd, write_ptr, nbytes, 0);
+    if (n <= 0) {
+        log(ERROR, "Error reading CAPA. Client Address: %s", proxy->session.client_string);
+        return set_error_msg(proxy, "-ERR failed reading CAPA from origin\r\n");
+    }
+
+    proxy_metrics.bytesWriteBuffer += n;
+    proxy_metrics.writesQtyWriteBuffer++;
+
+    bool error = false;
+    // -Err in CAPA --> eol simple
+    if (write_ptr[0] == '-') {
+        proxy->capa.eol_parser = parser_init(parser_no_classes(), eol_def);
+        error = true;
+    } else {
+        proxy->capa.eol_parser = parser_init(parser_no_classes(), eoml_def);;
+    }
+
+    size_t message_size = n;
+    for(int i = 0; i < n; i++) {
+        if(!proxy->capa.pipelining && !error ) {
+            const struct parser_event * pipelining_state = parser_feed(proxy->capa.capa_parser, write_ptr[i]);
+            if(pipelining_state->type == STRING_CMP_EQ) {
+                log(DEBUG, "PIPELINING found!", NULL);
+                proxy->capa.pipelining = true;
+            } else if(pipelining_state->type == STRING_CMP_NEQ) {
+                parser_reset(proxy->capa.capa_parser);
+            }
+        }
+
+        const struct parser_event * end_state = parser_feed(proxy->capa.eol_parser, write_ptr[i]);
+        if(end_state->type == STRING_CMP_EQ) { // Terminó el comando
+            if (!error)
+            {
+                if(!proxy->capa.pipelining) {
+                    log(DEBUG, "not PIPELINING found", NULL);
+                    proxy->response.add_pipelining = "PIPELINING\r\n.\r\n";
+                    proxy->response.add_lenght = 13;
+                } else{
+                    // Sumamos el .\r\n
+                    message_size += 3;
+                }
+            }
+            
+            if(selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS || selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS)
+                return FAILURE;
+
+            proxy->response.read_complete = true;
+            proxy->capa.checked = true;
+            buffer_write_adv(&proxy->write_buffer, message_size);
+            log(DEBUG, "CAPA checked!", NULL);
+            return RESPONSE;
+            
+        } else if(end_state->type == STRING_CMP_NEQ) {
+            parser_reset(proxy->capa.eol_parser);
+
+        } else if (write_ptr[i] == '.' && !error) {
+            message_size = i;
+        }
+    }
+
+    buffer_write_adv(&proxy->write_buffer, message_size);
+    
+    // Si no hay mas lugar en el buffer y no se encontro el EOL, se envia el mensaje y se recibe de nuevo del origen lo que queda del comando CAPA
+    if (!buffer_can_write(&proxy->write_buffer)){ 
+        log(DEBUG, "CAPA not checked cause full buffer...", NULL);
+        if (selector_set_interest(key->s, proxy->client_fd, OP_WRITE) != SELECTOR_SUCCESS || selector_set_interest_key(key, OP_NOOP) != SELECTOR_SUCCESS)
+            return FAILURE;
+        proxy->response.return_state = CAPA;
+        proxy->response.read_complete = false;
+        return RESPONSE;
+    }
+    else
+        return CAPA; // Por si quedaron cosas que recibir del origen...
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // SEND_ERROR_MSG
 ////////////////////////////////////////////////////////////////////////////////
+
+static unsigned set_error_msg(struct proxy *proxy, char * message){
+    log(DEBUG, "Error message: %s", message);
+    proxy->error_sender.message = message;
+        if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS)
+            return FAILURE;
+        return SEND_ERROR_MSG;
+}
 
 static unsigned write_error_msg(struct selector_key *key) {
     struct proxy * proxy = ATTACHMENT(key);
@@ -602,9 +965,9 @@ static unsigned write_error_msg(struct selector_key *key) {
 static const struct state_definition client_statbl[] = {
     //conectarse al proxy
     {    
-        .state              = RESOLVE,
-        .on_write_ready     = resolve,
-        .on_block_ready     = resolve_done,
+        .state            = RESOLVE,
+        .on_write_ready   = resolve,
+        .on_block_ready    = resolve_done,
     },
     {    
         .state            = CONNECT,
@@ -614,13 +977,24 @@ static const struct state_definition client_statbl[] = {
         .state            = HELLO,
         .on_read_ready    = hello_read,
         .on_write_ready   = hello_write,
-        //.on_departure     = hello_read_close,
+    },
+    {    
+        .state            = REQUEST,
+        .on_read_ready    = read_request,
+        .on_write_ready   = write_request,
+    },
+    {    
+        .state            = RESPONSE,
+        .on_arrival       = set_response,
+        .on_read_ready    = read_response,
+        .on_write_ready   = write_response,
     },
     {    
         .state            = CAPA,
+        .on_read_ready    = capa_read,
     },
     {    
-        .state            = COPY,
+        .state            = FILTER,
     },
     {
         .state            = SEND_ERROR_MSG,
@@ -633,30 +1007,3 @@ static const struct state_definition client_statbl[] = {
         .state            = FAILURE,
     },
 };
-
-
-//struct parser_definition *defs[COMMANDS]; ESTA ARRIBA DEFINIDO
-
-// // inicializamos los parsers de los comandos
-// void init_parsers_defs(){
-// 	for(int i=0; i < COMMANDS; i++){
-// 		defs[i] = malloc(sizeof(struct parser_definition));
-//         struct parser_definition parser = parser_utils_strcmpi(commands[i].name);
-//         memcpy(defs[i], &parser, sizeof(struct parser_definition));
-// 	}
-//     //H si va
-// 	struct parser_definition eol_def = parser_utils_strcmpi("\r\n");
-// 	parser * eol_parser = parser_init(parser_no_classes(), &eol_def);
-// }
-
-// void init_parsers(struct proxy* proxy){
-//     for (int i = 0; i < COMMANDS; i++) {
-//         proxy->parsers[i] = parser_init(parser_no_classes(), defs[i]);
-//     }
-// }
-
-// void reset_parsers(struct proxy* proxy){
-// 	for (int i = 0; i < COMMANDS; i++){
-// 		parser_reset(proxy->parsers[i]);
-// 	}
-// }

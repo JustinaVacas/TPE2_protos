@@ -25,11 +25,12 @@
 #include "logger.h"
 #include "util.h"
 #include "parser_utils.h"
+#include "queue.h"
 
 #define BUFFER_SIZE 64
 #define ATTACHMENT(key) ((struct proxy *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
-#define COMMANDS 12
+#define COMMANDS 9
 #define MAX_ARGS_LENGTH 40
 #define MAX_POOL 89
 #define TIMEOUT 120.0
@@ -57,10 +58,6 @@ struct session{
     char                client_string[SOCKADDR_TO_HUMAN_MIN];
     time_t              last_use;
 };
-
-typedef struct command_st {
-    char * name;
-} command_st;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,9 +97,44 @@ struct metrics proxy_metrics;
  * un cliente.
  */
 struct request_st{
-    //queueADT            commands; 
-    bool                waitingResponse;
+    command_queue * commands;
+    int command_state[COMMANDS];
 };
+
+/**
+ * Estructura con lo necesario para parsear commands enviados por
+ * un cliente.
+ */
+struct response_st {
+    //  comando a resolver
+    command_type    command;
+    bool            has_args;
+
+    //  fds por si hay filtro
+    int             write_fd;
+    int             read_fd;
+
+    //  cambia si es multiline
+    struct parser * eol_parser;
+
+    //  se usa por si hay que leer en varias pasadas
+    unsigned        return_state;
+
+    //  para poner PIPELINING en comando CAPA
+    char*           add_pipelining;
+    size_t          add_lenght;
+
+    //  states for reading
+    bool            read_init;
+    bool            read_complete;
+};
+
+typedef struct capa_st {
+    struct parser *     eol_parser;
+    struct parser *     capa_parser;
+    bool                pipelining;
+    bool                checked;
+}capa_st;
 
 /**
  * Máquina de estados general
@@ -113,8 +145,10 @@ enum proxy_state {
     RESOLVE,
     CONNECT,
     HELLO,
+    REQUEST,
+    RESPONSE,
     CAPA,
-    COPY,
+    FILTER,
     SEND_ERROR_MSG,
     // estados terminales
     DONE,
@@ -147,10 +181,7 @@ struct proxy {
     struct addrinfo *origin_resolution;
     struct addrinfo *current_origin_resolution;
 
-    //LIST_HEAD(command_list, nodeCDT) commands;
-
-    /** CAPA */
-    bool pipelining;
+    //LIST_HEAD(command_list, command_node) commands;
 
     /** Error */
     error_container  error_sender;
@@ -162,12 +193,16 @@ struct proxy {
     struct parser * parsers[COMMANDS];
     struct parser * eol;
     struct parser * eoml;
-    struct request_st request;
+
+    /** States */
+    struct request_st   request;
+    struct response_st  response;
+    struct capa_st      capa;
 
     /** Buffers */
-    buffer read_buffer;
+    buffer read_buffer; // El que lee del cliente y manda al origin             cliente --->  origen
     uint8_t read_buffer_space[BUFFER_SIZE];
-    buffer write_buffer;
+    buffer write_buffer; // El que recibe del origin y escribe en el cliente    origen  ---> cliente    
     uint8_t write_buffer_space[BUFFER_SIZE];
 
     /** Contador de referencias (cliente o origen que utiliza este estado)*/
@@ -180,5 +215,6 @@ struct proxy {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void pop3_passive_accept(struct selector_key *key);
+void initialize_parser_definitions();
 
 #endif 

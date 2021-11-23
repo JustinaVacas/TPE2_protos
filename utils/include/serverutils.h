@@ -16,6 +16,6 @@
 #define MAX_ADDR_BUFFER 128
 
 // Create, bind, and listen a new TCP server socket
-int setup_server_socket(char * address, int port, int family, int protocol, int max_pending_connections, char * err_msg);
+int create_socket(char * address, int port, int family, int protocol, int max_pending_connections, char * err_msg);
 
 #endif 

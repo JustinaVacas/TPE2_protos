@@ -2,13 +2,12 @@
 
 static char addrBuffer[MAX_ADDR_BUFFER];
 /*
- ** Se encarga de resolver el número de puerto para service (puede ser un string con el numero o el nombre del servicio)
- ** y crear el socket pasivo, para que escuche en cualquier IP, ya sea v4 o v6
+ ** Se encarga de crear el socket pasivo en la dirección correspondiente
  */
-int setup_server_socket(char * address, int family, int port, int protocol, int max_pending_connections, char * err_msg) {
+int create_socket(char * address, int family, int port, int protocol, int max_pending_connections, char * err_msg) {
 	
-	//log(INFO, "\nSetting up server socket %s","...");
-	fprintf(stderr, "Setting up server socket\n");
+	log(INFO, "Setting up server socket %s","...");
+
 	// Construct the server address structure
 	struct addrinfo addr_criteria;                   	// Criteria for address match
 	memset(&addr_criteria, 0, sizeof(addr_criteria)); 	// Zero out structure
@@ -25,14 +24,13 @@ int setup_server_socket(char * address, int family, int port, int protocol, int 
 	memset(&service, 0, sizeof(service));
 	itoa(port, service);
 
-	fprintf(stderr, "Getting addr info: address %s, port %s, family %d\n", address, service, family);
+	log(DEBUG, "Getting addr info: address %s, port %s, family %d\n", address, service, family);
 	int rtn = getaddrinfo(address, service, &addr_criteria, &serveraddr);
 	if (rtn != 0){
 		sprintf(err_msg, "getaddrinfo() failed %s", gai_strerror(rtn));
 		return -1;
 	}
 
-	fprintf(stderr, "Creating socket\n");
 	int server = -1;
 	for (struct addrinfo * addr = serveraddr; addr != NULL && server == -1; addr = addr->ai_next) {
 
@@ -75,7 +73,7 @@ int setup_server_socket(char * address, int family, int port, int protocol, int 
 		}
 	}
 
-    log(INFO, "Socket in fd %d created with succes.", server);
+    log(INFO, "Socket for %s in fd %d created with succes.", address, server);
     
 	freeaddrinfo(serveraddr);
 

@@ -1,14 +1,14 @@
 #include <queue.h>
 
-queue new_command_queue(){
-    return calloc(1, sizeof(struct queueCDT));
+command_queue * new_command_queue(){
+    return calloc(1, sizeof(command_queue));
 }
 
-node dequeue(queue queue) {
+command_node * dequeue(command_queue * queue) {
     if (is_empty(queue))
         return NULL;
 
-    node aux = queue->first;
+    command_node * aux = queue->first;
     queue->first = aux->next;
     queue->size--;
     if (queue->size == 0)
@@ -17,7 +17,7 @@ node dequeue(queue queue) {
 }
 
 
-void enqueue(queue queue, node node) {
+void enqueue(command_queue *queue, command_node * node) {
     if (is_empty(queue)) {
         queue->first = node;
         queue->last = node;
@@ -28,11 +28,11 @@ void enqueue(queue queue, node node) {
     queue->size++;
 }
 
-bool is_empty(queue queue) {
+bool is_empty(command_queue * queue) {
     return queue->size == 0;
 }
 
-void free_node(node node){
+void free_node(command_node * node){
     if(node == NULL)
         return;
 
@@ -40,11 +40,11 @@ void free_node(node node){
     free(node);
 }
 
-void destroy(queue queue){
+void destroy(command_queue * queue){
     free_node(queue->first);
     free(queue);
 }
 
-node peek(queue queue) {
+command_node * peek(command_queue * queue) {
     return queue->first;
 }
