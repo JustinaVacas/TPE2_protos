@@ -52,15 +52,13 @@ main(const int argc, char *argv[]) {
     close(STDIN_FILENO);
 
     //redirigimos stderr al archivo que nos pasaron o por defecto a /dev/null
-    /*
     FILE * error_file = NULL;
-    if ((error_file = fopen(args->error_file,"w") == NULL)
+    if ((error_file = fopen(args->error_file,"w")) == NULL)
     {
         log(FATAL, "Can't open stderr file %s", args->error_file);
         exit(1);
     }
     dup2(fileno(error_file), STDERR_FILENO);
-    */
 
     char * err_msg            = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;

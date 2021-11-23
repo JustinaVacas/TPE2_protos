@@ -20,8 +20,8 @@ cmp_admin(uint8_t * str1, uint8_t * str2){
 void 
 stats_handler(int fd, int request_len, struct admin_request * req, struct sockaddr_storage client_addr, size_t client_addr_len) {
     char response[DGRAM_SIZE];
-    size_t n = sprintf(response,"Historic connections: %ld\nCurrent connections: %ld\nTransferred bytes: %ld\r\n",
-    historic_connections, current_connections, transferred_bytes);
+    size_t n = sprintf(response,"Total connections: %llu\nActive connections: %llu\nTransferred bytes to client: %llu\nTransferred bytes to origin: %llu\r\n",
+    proxy_metrics.totalConnections, proxy_metrics.activeConnections, proxy_metrics.totalBytesToClient, proxy_metrics.totalBytesToOrigin);
 
     sent(fd, response, n, client_addr, client_addr_len);
 }

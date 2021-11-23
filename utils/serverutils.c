@@ -30,7 +30,7 @@ int create_socket(char * address, int family, int port, int protocol, int max_pe
 	memset(&service, 0, sizeof(service));
 	itoa(port, service);
 
-	log(DEBUG, "Getting addr info: address %s, port %s, family %d\n", address, service, family);
+	log(DEBUG, "Getting addr info: address %s, port %s, family %d", address, service, family);
 	int rtn = getaddrinfo(address, service, &addr_criteria, &serveraddr);
 	if (rtn != 0){
 		sprintf(err_msg, "getaddrinfo() failed %s", gai_strerror(rtn));

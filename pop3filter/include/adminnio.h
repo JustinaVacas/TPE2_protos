@@ -22,10 +22,8 @@
 #define SIZE 5
 #define ASCII 48
 
-extern size_t historic_connections;
-extern size_t current_connections;
-extern size_t transferred_bytes;
-// extern stat_type * stat;
+extern struct metrics proxyMetrics;
+
 extern float  time_out;
 
 typedef struct admin_request {
