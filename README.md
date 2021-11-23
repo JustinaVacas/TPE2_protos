@@ -1,11 +1,18 @@
 # TPE2_protos
 
-Contenido:
+## Contenido
 
 En el directorio "pop3ctl" se encuentra el cliente que se comunica con el servidor admin.
+
 En el directorio "pop3filter" se encuentra el proxy POP3.
 
-Ejecutar:
+## Compilacion
 
-- ./pop3filter.out ejecutable del pop3Filter
-- ./pop3client.out ejecutable del  pop3client
+Para compilar y ejecutar, correr el comando "make" en /TPE2_PROTOS
+
+## Ejecutables
+
+Los ejecutables se encuentran en:
+
+- TPE2_PROTOS/pop3filter/pop3filter.out 
+- TPE2_PROTOS/pop3client/pop3client.out 
