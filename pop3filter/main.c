@@ -91,7 +91,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET, args->management_listen_address, &a4) == 1)
     {
         // Inicializamos el servidor admin IPv4
-        management_ipv4 = create_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv4 = create_socket(args->management_listen_address, AF_INET ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv4 < 0){
             if (err_msg == NULL)
             {
@@ -120,7 +120,7 @@ main(const int argc, char *argv[]) {
     if (inet_pton(AF_INET6, args->management_listen_address, &a6) == 1)
     {
         // Inicializamos el servidor admin IPv6
-        management_ipv6 = create_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_TCP, MAX_PENDING_CONNECTIONS, err_msg);
+        management_ipv6 = create_socket(args->management_listen_address, AF_INET6 ,args->management_port, IPPROTO_UDP, MAX_PENDING_CONNECTIONS, err_msg);
         if(management_ipv6 < 0){
             if (err_msg == NULL)
             {
