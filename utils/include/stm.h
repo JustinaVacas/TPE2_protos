@@ -34,7 +34,7 @@ struct state_machine {
     const struct state_definition *current;
 };
 
-struct selector_key *key;
+typedef struct selector_key * key_ptr;
 
 /**
  * definición de un estado de la máquina de estados
@@ -47,15 +47,15 @@ struct state_definition {
     unsigned state;
 
     /** ejecutado al arribar al estado */
-    void     (*on_arrival)    (const unsigned state, struct selector_key *key);
+    void     (*on_arrival)    (const unsigned state, key_ptr key);
     /** ejecutado al salir del estado */
-    void     (*on_departure)  (const unsigned state, struct selector_key *key);
+    void     (*on_departure)  (const unsigned state, key_ptr key);
     /** ejecutado cuando hay datos disponibles para ser leidos */
-    unsigned (*on_read_ready) (struct selector_key *key);
+    unsigned (*on_read_ready) (key_ptr key);
     /** ejecutado cuando hay datos disponibles para ser escritos */
-    unsigned (*on_write_ready)(struct selector_key *key);
+    unsigned (*on_write_ready)(key_ptr key);
     /** ejecutado cuando hay una resolución de nombres lista */
-    unsigned (*on_block_ready)(struct selector_key *key);
+    unsigned (*on_block_ready)(key_ptr key);
 };
 
 
@@ -69,20 +69,20 @@ stm_state        (struct state_machine *stm);
 
 /** indica que ocurrió el evento read. retorna nuevo id de nuevo estado. */
 unsigned
-stm_handler_read(struct state_machine *stm, struct selector_key *key);
+stm_handler_read(struct state_machine *stm, key_ptr key);
 
 /** indica que ocurrió el evento write. retorna nuevo id de nuevo estado. */
 unsigned
-stm_handler_write(struct state_machine *stm, struct selector_key *key);
+stm_handler_write(struct state_machine *stm, key_ptr key);
 
 /** indica que ocurrió el evento block. retorna nuevo id de nuevo estado. */
 unsigned
-stm_handler_block(struct state_machine *stm, struct selector_key *key);
+stm_handler_block(struct state_machine *stm, key_ptr key);
 
 /** indica que ocurrió el evento close. retorna nuevo id de nuevo estado. */
 void
-stm_handler_close(struct state_machine *stm, struct selector_key *key);
+stm_handler_close(struct state_machine *stm, key_ptr key);
 
-void jump(struct state_machine * stm, unsigned next, struct selector_key *key);
+void jump(struct state_machine * stm, unsigned next, key_ptr key);
 
 #endif

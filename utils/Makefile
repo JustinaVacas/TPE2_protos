@@ -3,6 +3,8 @@ include Makefile.inc
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.o)
 rm       = rm -rf
+CC       = gcc
+LINKER 	 = gcc
 
 
 all:$(SOURCES)

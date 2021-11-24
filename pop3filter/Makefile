@@ -4,6 +4,8 @@ TARGET := pop3filter
 SOURCES := $(wildcard *.c)
 OBJECTS := $(SOURCES:.c=.o)
 rm       = rm -rf
+CC       = gcc
+LINKER 	 = gcc
 
 
 all: comp link

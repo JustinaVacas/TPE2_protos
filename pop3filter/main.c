@@ -32,6 +32,7 @@
 //#define TIMEOUT 120.0
 
 float time_out = 120.0;
+struct metrics proxy_metrics;
 
 static bool done = false;
 struct pop3args * args;

@@ -7,17 +7,14 @@
                 ||  (command.type == CMD_LIST && !args)         \
                 ||  (command.type == CMD_TOP  && args)         \
                 ||  (command.type == CMD_RETR && args)         \
-                ||  (command.type == CMD_UIDL && !args)) 
-
-size_t historic_connections = 0;
-size_t current_connections = 0;
-size_t transferred_bytes = 0;
+                ||  (command.type == CMD_UIDL && !args))
 
 static const struct state_definition client_statbl[10];
+extern struct metrics proxy_metrics;
 
 command_st commands[] = {{"USER", CMD_USER}, {"PASS", CMD_PASS}, {"QUIT", CMD_QUIT}, {"RETR", CMD_RETR},{"LIST", CMD_LIST},{"CAPA", CMD_CAPA},{"TOP", CMD_TOP},{"UIDL", CMD_UIDL},{"STAT", CMD_STAT}};
 
-static unsigned set_error_msg(struct proxy *proxy, char * message);
+static unsigned set_error_msg(struct selector_key * key, char * message);
 
 ////////////////////////////////////////////////////////////////////////////////
 // PARSERS
@@ -482,7 +479,7 @@ static unsigned connect_fqdn(struct selector_key* key) {
     
     if(sock == -1) {
         log(ERROR, "Client %s could not connect to origin %s:%d",proxy->session.client_string, args->origin_address, args->origin_port);
-        return set_error_msg(proxy, "-ERR Connection refused.\r\n");
+        return set_error_msg(key, "-ERR Connection refused.\r\n");
     }
 
     return CONNECT;
@@ -506,7 +503,7 @@ static unsigned connection_ready(struct selector_key* key) {
         if (proxy->current_origin_resolution == NULL)
         {
             log(ERROR, "Problem connecting to origin server. Client Address: %s", proxy->session.client_string);
-            return set_error_msg(proxy, "-ERR Connection refused.\r\n");
+            return set_error_msg(key, "-ERR Connection refused.\r\n");
         }
         return connect_fqdn(key);
 
@@ -540,7 +537,7 @@ static unsigned hello_read(struct selector_key *key) {
 
     if (n <= 0) { 
         log(ERROR, "Error in HELLO. Client Address: %s", proxy->session.client_string);
-        return set_error_msg(proxy, "-ERR failed reading hello from client\r\n");
+        return set_error_msg(key, "-ERR failed reading hello from client\r\n");
     }
 
     for(int i = 0; i < n; i++) {
@@ -569,7 +566,7 @@ static unsigned hello_write(struct selector_key* key) {
 
     if(n <= 0) {
         log(ERROR, "Initial hello has an error. Client Address: %s", proxy->session.client_string);
-        return set_error_msg(proxy, "-ERR failed sending hello from origin\r\n");
+        return set_error_msg(key, "-ERR failed sending hello from origin\r\n");
     }
 
     buffer_read_adv(&proxy->write_buffer, n);
@@ -601,7 +598,7 @@ static unsigned read_request (struct selector_key* key) {
     ssize_t n = recv(proxy->client_fd, write_ptr, nbytes, 0);
 
     if (n < 0) {
-        return set_error_msg(proxy, "-ERR failed reading request from client");
+        return set_error_msg(key, "-ERR failed reading request from client");
     } else if (n == 0) {
         log(INFO, "Client %s disconnected", proxy->session.client_string);
         return DONE;
@@ -688,7 +685,7 @@ static unsigned write_request(struct selector_key* key){
 
     ssize_t n = send(key->fd, read_ptr, node->lenght, MSG_NOSIGNAL);
     if(n <= 0) {
-        return set_error_msg(proxy, "-ERR failed sending request to origin");
+        return set_error_msg(key, "-ERR failed sending request to origin");
     }
 
     buffer_read_adv(&proxy->read_buffer, n);
@@ -735,7 +732,7 @@ static unsigned read_response(struct selector_key* key) {
 
     ssize_t n = recv(proxy->origin_fd, write_ptr, nbytes, 0);
     if (n <= 0) {
-        return set_error_msg(proxy, "-ERR reading response from origin");
+        return set_error_msg(key, "-ERR reading response from origin");
     }
 
     if (!proxy->response.read_init) {
@@ -791,7 +788,7 @@ static unsigned write_response(struct selector_key* key) {
 
     ssize_t n = send(key->fd, read_ptr, nbytes, MSG_NOSIGNAL);
     if(n <= 0){
-        return set_error_msg(proxy, "-ERR writing response to client");
+        return set_error_msg(key, "-ERR writing response to client");
     }
     proxy_metrics.readsQtyWriteBuffer++;
     proxy_metrics.totalBytesToClient += n;
@@ -821,7 +818,7 @@ static unsigned write_response(struct selector_key* key) {
     if (proxy->response.command == CMD_CAPA && proxy->response.add_lenght != 0) {
         ssize_t extra = send(key->fd, proxy->response.add_pipelining, proxy->response.add_lenght, MSG_NOSIGNAL);
         if(extra <= 0)
-            return set_error_msg(proxy, "-ERR writing response to client");
+            return set_error_msg(key, "-ERR writing response to client");
         proxy_metrics.totalBytesToClient += n;
     }
 
@@ -854,7 +851,7 @@ static unsigned capa_read(struct selector_key* key) {
     ssize_t n = recv(proxy->origin_fd, write_ptr, nbytes, 0);
     if (n <= 0) {
         log(ERROR, "Error reading CAPA. Client Address: %s", proxy->session.client_string);
-        return set_error_msg(proxy, "-ERR failed reading CAPA from origin\r\n");
+        return set_error_msg(key, "-ERR failed reading CAPA from origin\r\n");
     }
 
     proxy_metrics.bytesWriteBuffer += n;
@@ -931,7 +928,8 @@ static unsigned capa_read(struct selector_key* key) {
 // SEND_ERROR_MSG
 ////////////////////////////////////////////////////////////////////////////////
 
-static unsigned set_error_msg(struct proxy *proxy, char * message){
+static unsigned set_error_msg(struct selector_key *key, char * message){
+    struct proxy * proxy = ATTACHMENT(key);
     log(DEBUG, "Error message: %s", message);
     proxy->error_sender.message = message;
         if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS)

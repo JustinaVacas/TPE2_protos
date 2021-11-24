@@ -26,6 +26,7 @@
 #include "util.h"
 #include "parser_utils.h"
 #include "queue.h"
+#include "adminnio.h"
 
 #define BUFFER_SIZE 64
 #define ATTACHMENT(key) ((struct proxy *)(key)->data)
@@ -97,7 +98,7 @@ struct metrics {
     unsigned long long   commandsFilteredQty;
 };
 
-struct metrics proxy_metrics;
+extern struct metrics proxy_metrics;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////

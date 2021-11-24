@@ -12,6 +12,9 @@
 #include "args.h"
 #include "pop3proxynio.h"
 
+extern float  time_out;
+extern struct metrics proxy_metrics;
+
 #define ADMIN_AUTH ((uint8_t *)"PASS")
 #define ADMIN_AUTH_STR "PASS"
 
@@ -21,10 +24,6 @@
 #define COMMAND_SIZE 3              // STATS, GET_TIMEOUT, SET_TIMEOUT
 #define SIZE 5
 #define ASCII 48
-
-extern struct metrics proxyMetrics;
-
-extern float  time_out;
 
 typedef struct admin_request {
     uint8_t     auth[SIZE];         // 5 bytes
