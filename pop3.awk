@@ -1,6 +1,6 @@
 #!/usr/bin/awk -f
 BEGIN {
-    printf "+OK hola!\r\n"
+   printf "+OK hola!\r\n"
 }
 "QUIT" == toupper($1) {
    printf "+OK Adios!\r\n"
@@ -15,9 +15,9 @@ BEGIN {
    next;
 }
 "CAPA" == toupper($1) {
-   printf "+OK Mis capacidades son:\r\n";
-   printf "CAPA\r\n";
-   printf "USER\r\n";
+   printf "+OK Mis capacidades son:"
+   printf "CAPA"
+   printf "USER\r\n"
    printf ".\r\n";
    next;
 }

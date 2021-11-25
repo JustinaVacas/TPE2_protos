@@ -28,7 +28,7 @@
 #include "queue.h"
 #include "adminnio.h"
 
-#define BUFFER_SIZE 64
+#define BUFFER_SIZE 1024
 #define ATTACHMENT(key) ((struct proxy *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define COMMANDS 9
@@ -108,6 +108,9 @@ extern struct metrics proxy_metrics;
  */
 struct request_st{
     command_queue * commands;
+    int command_found;
+    int command_lenght;
+    bool command_has_args;
     int command_state[COMMANDS];
 };
 
@@ -144,6 +147,7 @@ typedef struct capa_st {
     struct parser *     capa_parser;
     bool                pipelining;
     bool                checked;
+    bool                started;
 }capa_st;
 
 /**
@@ -225,6 +229,8 @@ struct proxy {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void pop3_passive_accept(struct selector_key *key);
+void proxy_pool_destroy();
 void initialize_parser_definitions();
+void destroy_parser_definitions();
 
 #endif 

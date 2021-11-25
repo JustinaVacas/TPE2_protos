@@ -244,7 +244,6 @@ finally:
         selector_destroy(selector);
     }
     selector_close();
-
     if(server_ipv4 >= 0) {
         close(server_ipv4);
     }
@@ -257,5 +256,9 @@ finally:
     if(management_ipv6 >= 0) {
         close(management_ipv6);
     }
+    proxy_pool_destroy();
+    log(INFO, "%s", "Proxy pool destroyed...");
+    destroy_parser_definitions();
+    log(INFO, "%s", "Parser defs destroyed...");
     return ret;
 }
